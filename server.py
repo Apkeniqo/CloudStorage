@@ -21,6 +21,7 @@ from watchdog.events import FileSystemEventHandler
 
 import db
 import logutil
+import version
 
 MIN_PYTHON = (3, 9)
 if sys.version_info < MIN_PYTHON:
@@ -765,6 +766,7 @@ def admin_page():
         db_size = 0
 
     info = {
+        'version': version.VERSION,
         'host': HOST,
         'port': PORT,
         'upload_folder': UPLOAD_FOLDER,
@@ -1233,6 +1235,7 @@ def create_http_server():
 
 def print_runtime_summary():
     print("服务配置加载完成:")
+    print(f" - VERSION: {version.VERSION}")
     print(f" - PYTHON: {sys.version.split()[0]}")
     print(f" - HOST: {HOST}")
     print(f" - PORT: {PORT}")

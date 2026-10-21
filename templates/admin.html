@@ -253,6 +253,7 @@
         <h2>运行状态</h2>
         <p class="sub">只读信息，来自当前进程</p>
         <div class="info-grid">
+            <div class="info-row"><span>版本</span><code>{{ info.version }}</code></div>
             <div class="info-row"><span>监听</span><code>{{ info.host }}:{{ info.port }}</code></div>
             <div class="info-row"><span>已运行</span><code>{{ info.uptime }} 秒</code></div>
             <div class="info-row"><span>存储目录</span><code>{{ info.upload_folder }}</code></div>

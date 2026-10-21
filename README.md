@@ -63,6 +63,41 @@ check_interval_seconds = 600 # 检查间隔
 [日志] 已清理 1 个旧日志（cloudstorage.log.7），原因：目录 2.0MB 超过上限 1MB
 ```
 
+## 版本与更新
+
+版本号写在 `version.py`：
+
+```python
+VERSION = 'beta 2026.1022.0'
+```
+
+格式是 `<阶段> <年份>.<月日>.<当天构建号>`，每次发布新版本都要改这里——当天第二次更新就是 `beta 2026.1022.1`。
+版本号会打印在启动信息、`/admin` 的「运行状态」里，`update.py` 也用它来判断要不要更新。
+
+**不用再手动 `git pull`**，直接跑更新脚本：
+
+```powershell
+.\update.cmd              # 双击也行；检查版本 -> 下载有变化的文件
+.\update.cmd --check      # 只看有没有新版本
+.\update.cmd --restart    # 更新完顺便重启 CloudStorage 服务（需管理员）
+```
+
+`update.py` 做的事：
+
+1. 通过 `api.github.com` 读远端 `version.py`（`github.com:443` 被墙也不影响）；
+2. 与本地版本比较，相同就退出；
+3. 版本更高时按文件逐个比对内容，**只写入真正变化的文件**；
+4. 跳过本机数据：`config.ini`、`logs/`、`CloudStorage/`、`uploads_temp/`、`.venv/`、`.git/`。
+
+私有仓库需要在 `config.ini` 填一个访问令牌：
+
+```ini
+[UPDATE]
+repo = Apkeniqo/CloudStorage
+branch = main
+token = ghp_xxx        # 只需 Contents: read 权限
+```
+
 ## 快速开始
 
 
