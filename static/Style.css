@@ -282,7 +282,7 @@ body {
 /* List View (列表视图) */
 .view-list .file-header {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 60px;
+    grid-template-columns: 2fr 1fr 1fr 128px;
     padding: 8px 12px;
     font-size: 12px;
     color: var(--text-secondary);
@@ -317,7 +317,7 @@ body {
 
 .view-list .file-item {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr 60px;
+    grid-template-columns: 2fr 1fr 1fr 128px;
     align-items: center;
     padding: 10px 12px;
     border-radius: var(--radius);
@@ -408,6 +408,12 @@ body {
     transition: opacity 0.2s;
 }
 
+.view-grid .file-action a,
+.view-grid .file-action button {
+    padding: 3px 5px;
+    font-size: 12px;
+}
+
 .view-grid .file-item:hover .file-action {
     opacity: 1;
 }
@@ -428,6 +434,12 @@ body {
 
 .download-btn:hover {
     background: var(--hover-bg);
+}
+
+/* 列表操作列：四个按钮排成一行，不换行（否则行高被撑高、看起来像变形） */
+.view-list .file-action {
+    white-space: nowrap;
+    text-align: right;
 }
 
 /* Action Rename Button */
