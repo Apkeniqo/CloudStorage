@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台 - CloudStorage</title>
+    <link rel="stylesheet" href="/static/Style.css">
+    <style>
+        body {
+            align-items: flex-start;
+            padding: 32px 20px 60px;
+        }
+
+        .admin-wrap {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .admin-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .admin-head h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .admin-head .who {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--card-border);
+            border-radius: calc(var(--radius) * 1.5);
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+            padding: 20px 22px;
+        }
+
+        .card h2 {
+            margin: 0 0 4px;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .card .sub {
+            margin: 0 0 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 10px 24px;
+            font-size: 13px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 5px 0;
+            border-bottom: 1px dashed var(--card-border);
+        }
+
+        .info-row span:first-child {
+            color: var(--text-secondary);
+            flex: none;
+        }
+
+        .info-row code {
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            word-break: break-all;
+            text-align: right;
+        }
+
+        .field {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 8px 18px;
+            align-items: start;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--card-border);
+        }
+
+        .field:last-of-type { border-bottom: none; }
+
+        .field .label {
+            font-size: 13px;
+            padding-top: 7px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .field .help {
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        .field input[type="text"],
+        .field input[type="number"],
+        .field input[type="password"],
+        .field select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 7px 10px;
+            font-size: 13px;
+            color: var(--text-main);
+            background: var(--hover-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            outline: none;
+        }
+
+        .field input:focus,
+        .field select:focus { border-color: var(--accent-color); }
+
+        .field input.invalid { border-color: #d13438; }
+
+        .badge {
+            font-size: 10.5px;
+            padding: 1px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--card-border);
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .badge.restart {
+            color: #9a6700;
+            border-color: rgba(154, 103, 0, 0.4);
+        }
+
+        .field-error {
+            grid-column: 2;
+            font-size: 12px;
+            color: #d13438;
+            min-height: 0;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        button.primary,
+        button.ghost {
+            padding: 9px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: var(--radius);
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        button.primary {
+            background: var(--accent-color);
+            color: #fff;
+        }
+
+        button.primary:hover { background: var(--accent-hover); }
+        button.primary:disabled { opacity: .55; cursor: default; }
+
+        button.ghost {
+            background: transparent;
+            color: var(--text-main);
+            border-color: var(--card-border);
+        }
+
+        button.ghost:hover { background: var(--hover-bg); }
+
+        .toast {
+            font-size: 13px;
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            display: none;
+            border: 1px solid transparent;
+        }
+
+        .toast.show { display: block; }
+        .toast.ok { color: #107c10; border-color: rgba(16, 124, 16, .35); background: rgba(16, 124, 16, .08); }
+        .toast.err { color: #d13438; border-color: rgba(209, 52, 56, .35); background: rgba(209, 52, 56, .08); }
+
+        .pw-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            max-width: 520px;
+        }
+
+        .pw-grid label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .pw-grid input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 7px 10px;
+            font-size: 13px;
+            color: var(--text-main);
+            background: var(--hover-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            outline: none;
+        }
+
+        @media (max-width: 640px) {
+            .field { grid-template-columns: 1fr; }
+            .field-error { grid-column: 1; }
+            .pw-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="admin-wrap">
+
+    <div class="admin-head">
+        <h1>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent-color)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+            管理后台
+        </h1>
+        <div class="who">
+            {{ user['username'] }}（{{ user['role'] }}）· <a href="/">返回文件</a> · <a href="/logout">退出</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>运行状态</h2>
+        <p class="sub">只读信息，来自当前进程</p>
+        <div class="info-grid">
+            <div class="info-row"><span>监听</span><code>{{ info.host }}:{{ info.port }}</code></div>
+            <div class="info-row"><span>已运行</span><code>{{ info.uptime }} 秒</code></div>
+            <div class="info-row"><span>存储目录</span><code>{{ info.upload_folder }}</code></div>
+            <div class="info-row"><span>临时目录</span><code>{{ info.temp_dir }}</code></div>
+            <div class="info-row"><span>数据库</span><code>{{ info.db_path }}</code></div>
+            <div class="info-row"><span>数据库大小</span><code>{{ '%.1f'|format(info.db_size / 1024) }} KB</code></div>
+            <div class="info-row"><span>文件 / 用户</span><code>{{ info.files }} 个 / {{ info.users }} 人</code></div>
+            <div class="info-row"><span>日志</span><code>{{ info.log_path }}</code></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>配置</h2>
+        <p class="sub">保存后写回 <code>{{ info.config_path }}</code>，注释和顺序都会保留</p>
+
+        {% for group in groups %}
+        <h3 style="font-size:13px;margin:18px 0 2px;color:var(--text-secondary);">{{ group.name }}</h3>
+        {% for item in group['items'] %}
+        <div class="field">
+            <div class="label">
+                {{ item.label }}
+                {% if item.restart %}<span class="badge restart">需重启</span>{% endif %}
+                <div class="help">{{ item.help }}</div>
+            </div>
+            <div>
+                {% if item.type == 'bool' %}
+                <select data-key="{{ item.key }}">
+                    <option value="true" {% if item.value|lower in ['true','1','yes','on'] %}selected{% endif %}>启用</option>
+                    <option value="false" {% if item.value|lower in ['false','0','no','off'] %}selected{% endif %}>关闭</option>
+                </select>
+                {% elif item.type == 'int' %}
+                <input type="number" data-key="{{ item.key }}" value="{{ item.value }}">
+                {% else %}
+                <input type="text" data-key="{{ item.key }}" value="{{ item.value }}" spellcheck="false">
+                {% endif %}
+                <div class="field-error" data-error-for="{{ item.key }}"></div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endfor %}
+
+        <div class="actions">
+            <button class="primary" id="save-btn" onclick="saveConfig()">保存配置</button>
+            <div class="toast" id="config-toast"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>修改密码</h2>
+        <p class="sub">只影响当前登录账号，改完立即生效</p>
+        <div class="pw-grid">
+            <div>
+                <label>当前密码</label>
+                <input type="password" id="old-pw" autocomplete="current-password">
+            </div>
+            <div>
+                <label>新密码（至少 6 位）</label>
+                <input type="password" id="new-pw" autocomplete="new-password">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="ghost" id="pw-btn" onclick="changePassword()">更新密码</button>
+            <div class="toast" id="pw-toast"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const CSRF = {{ csrf|tojson }};
+
+    function showToast(id, ok, text) {
+        const el = document.getElementById(id);
+        el.className = 'toast show ' + (ok ? 'ok' : 'err');
+        el.textContent = text;
+    }
+
+    async function postJSON(url, body) {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+            body: JSON.stringify(body)
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) { /* 非 JSON 响应 */ }
+        return { ok: res.ok, data };
+    }
+
+    async function saveConfig() {
+        const btn = document.getElementById('save-btn');
+        const inputs = document.querySelectorAll('[data-key]');
+        const payload = {};
+        inputs.forEach(el => { payload[el.dataset.key] = el.value; el.classList.remove('invalid'); });
+        document.querySelectorAll('[data-error-for]').forEach(el => el.textContent = '');
+
+        btn.disabled = true;
+        try {
+            const { ok, data } = await postJSON('/admin/config', payload);
+            if (ok && data.ok) {
+                showToast('config-toast', true, data.message || '已保存');
+                if ((data.applied || []).length) {
+                    setTimeout(() => location.reload(), 1200);
+                }
+            } else {
+                showToast('config-toast', false, data.message || '保存失败');
+                const errors = data.errors || {};
+                Object.keys(errors).forEach(key => {
+                    const input = document.querySelector(`[data-key="${key}"]`);
+                    if (input) input.classList.add('invalid');
+                    const box = document.querySelector(`[data-error-for="${key}"]`);
+                    if (box) box.textContent = errors[key];
+                });
+            }
+        } catch (e) {
+            showToast('config-toast', false, '请求失败：' + e);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    async function changePassword() {
+        const btn = document.getElementById('pw-btn');
+        const oldPw = document.getElementById('old-pw').value;
+        const newPw = document.getElementById('new-pw').value;
+        btn.disabled = true;
+        try {
+            const { ok, data } = await postJSON('/admin/password', { old: oldPw, new: newPw });
+            showToast('pw-toast', ok && data.ok, data.message || (ok ? '已更新' : '更新失败'));
+            if (ok && data.ok) {
+                document.getElementById('old-pw').value = '';
+                document.getElementById('new-pw').value = '';
+            }
+        } catch (e) {
+            showToast('pw-toast', false, '请求失败：' + e);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // 跟随主界面的主题
+    (function () {
+        var saved = localStorage.getItem('fluent_theme') || 'system';
+        var dark = saved === 'dark' ||
+            (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    })();
+</script>
+</body>
+</html>

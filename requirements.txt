@@ -1,0 +1,4 @@
+flask>=3.0
+flask-socketio>=5.3
+watchdog>=4.0
+pywin32>=306; sys_platform == "win32"

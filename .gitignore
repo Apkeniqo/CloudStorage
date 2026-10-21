@@ -1,0 +1,23 @@
+# 运行期数据（不要提交）
+config.ini
+CloudStorage/
+uploads_temp/
+logs/
+
+# 虚拟环境与缓存
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# 历史遗留文件（还留在磁盘上，只是不进仓库）
+server copy.py
+templates/Desktop1.html
+static/App1.js
+static/App2.js
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

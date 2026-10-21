@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - CloudStorage</title>
+    <link rel="stylesheet" href="/static/Style.css">
+    <style>
+        .login-card {
+            width: 100%;
+            max-width: 340px;
+            background: var(--card-bg);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--card-border);
+            border-radius: calc(var(--radius) * 1.5);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
+            padding: 32px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .login-card h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .login-card .hint {
+            margin: 0 0 4px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .login-card input[type="text"],
+        .login-card input[type="password"] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            font-size: 14px;
+            color: var(--text-main);
+            background: var(--hover-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            outline: none;
+        }
+
+        .login-card input[type="text"]:focus,
+        .login-card input[type="password"]:focus {
+            border-color: var(--accent-color);
+        }
+
+        .login-card button {
+            padding: 10px 12px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent-color);
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+        }
+
+        .login-card button:hover {
+            background: var(--accent-hover);
+        }
+
+        .login-card .error {
+            font-size: 13px;
+            color: #d13438;
+        }
+    </style>
+</head>
+<body>
+    <form class="login-card" method="post">
+        <h1>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent-color)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
+            云端文件
+        </h1>
+        <p class="hint">使用账号密码登录</p>
+        <input type="text" name="username" placeholder="用户名" value="{{ username }}" autofocus autocomplete="username">
+        <input type="password" name="password" placeholder="密码" autocomplete="current-password">
+        <input type="hidden" name="next" value="{{ next }}">
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        <button type="submit">登录</button>
+    </form>
+
+    <script>
+        // 跟随主界面的主题设置
+        (function () {
+            var saved = localStorage.getItem('fluent_theme') || 'system';
+            var dark = saved === 'dark' ||
+                (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+</body>
+</html>
