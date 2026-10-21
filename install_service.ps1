@@ -74,19 +74,20 @@ if ($dir -like '\\*') {
 
 # ---------------------------------------------------------------- 2. 配置文件
 function Invoke-Native {
-    # 运行外部命令并返回退出码；stderr 一律当输出，不让 $ErrorActionPreference='Stop' 抛异常
+    # 运行外部命令并只返回退出码。
+    # 注意：输出必须走 Write-Host，不能留在管道里，否则会和 return 的整数一起
+    # 变成数组（调用方 $exit -ne 0 永远为真）。
     param([string]$Exe, [string[]]$Arguments, [switch]$PassThru)
 
     $prev = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
+        $output = @(& $Exe @Arguments 2>&1)
+        $code = $LASTEXITCODE
         if ($PassThru) {
-            & $Exe @Arguments 2>&1
+            $output | ForEach-Object { Write-Host $_ }
         }
-        else {
-            & $Exe @Arguments 2>&1 | Out-Null
-        }
-        return $LASTEXITCODE
+        return [int]$code
     }
     finally {
         $ErrorActionPreference = $prev
@@ -161,7 +162,7 @@ function Find-Python {
     $candidates = @()
     $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
     if ($pyLauncher) {
-        foreach ($v in @('-3.13', '-3.12', '-3.11', '-3.10', '-3.9', '-3')) {
+        foreach ($v in @('-3.14', '-3.13', '-3.12', '-3.11', '-3.10', '-3.9', '-3')) {
             $candidates += , @('py', $v)
         }
     }
@@ -282,7 +283,12 @@ try {
 
     Write-Host "注册服务 $serviceName ..."
     $installExit = Invoke-Native $py @((Join-Path $dir 'service.py'), '--startup', 'auto', 'install') -PassThru
-    if ($installExit -ne 0) { throw "服务注册失败（exit $installExit）。" }
+    # pywin32 有时失败也返回 0，这里再确认服务真的出现在 SCM 里
+    $registered = Get-Service $serviceName -ErrorAction SilentlyContinue
+    if ($installExit -ne 0 -or -not $registered) {
+        throw "服务注册失败（exit=$installExit，服务是否存在=$([bool]$registered)）。请确认是以管理员身份运行，然后重试。"
+    }
+    Write-Host "服务已注册：$serviceName"
 
     # 崩溃自动重启：5s / 10s / 30s，一天后重置计数
     $null = Invoke-Native 'sc.exe' @('failure', $serviceName, 'reset=', '86400',
