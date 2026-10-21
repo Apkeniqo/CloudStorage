@@ -164,6 +164,8 @@ SETTING_SPECS = [
      'label': '启用登录', 'help': '关闭后所有人可直接访问；改动需重启'},
     {'group': '认证', 'key': 'isolate_files', 'section': 'AUTH', 'type': 'bool', 'restart': False,
      'label': '文件隔离', 'help': '开启后普通用户只能看到并操作自己上传的文件，管理员不受影响'},
+    {'group': '认证', 'key': 'guest_browse', 'section': 'AUTH', 'type': 'bool', 'restart': False,
+     'label': '允许访客浏览', 'help': '开启后登录页出现「以访客身份浏览」，只能查看和下载，不能上传/删除/改名'},
     {'group': '认证', 'key': 'admin_user', 'section': 'AUTH', 'type': 'str', 'restart': True,
      'label': '管理员用户名', 'help': '仅在数据库里还没有任何用户时用于创建首个管理员'},
 
@@ -267,7 +269,7 @@ def hot_apply(keys):
     """把不需要重启的配置立刻应用到内存"""
     global MAX_CONTENT_LENGTH_MB, MAX_CONTENT_LENGTH, CHUNK_EXPIRE_SECONDS, CLEANUP_INTERVAL_SECONDS
     global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL, MAX_STORAGE_MB
-    global ISOLATE_FILES
+    global ISOLATE_FILES, GUEST_BROWSE
 
     if 'max_content_length_mb' in keys:
         MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb',
@@ -278,6 +280,8 @@ def hot_apply(keys):
         MAX_STORAGE_MB = config.getint('LIMIT', 'max_storage_mb', fallback=MAX_STORAGE_MB)
     if 'isolate_files' in keys:
         ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=ISOLATE_FILES)
+    if 'guest_browse' in keys:
+        GUEST_BROWSE = config.getboolean('AUTH', 'guest_browse', fallback=GUEST_BROWSE)
     if 'chunk_expire_seconds' in keys:
         CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds',
                                              fallback=CHUNK_EXPIRE_SECONDS)
@@ -349,6 +353,9 @@ ADMIN_PASSWORD = (config.get('AUTH', 'admin_password', fallback='') or '').strip
 
 # 文件隔离：开启后普通用户只能看到/操作自己上传的文件，管理员不受影响
 ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=False)
+
+# 访客浏览：开启后登录页出现「以访客身份浏览」，只能看和下载
+GUEST_BROWSE = config.getboolean('AUTH', 'guest_browse', fallback=False)
 
 # 会话密钥：没有就生成一个并写回配置，重启服务后已登录用户不掉线
 SESSION_SECRET = (config.get('AUTH', 'secret', fallback='') or '').strip()
@@ -547,7 +554,7 @@ def get_file_list():
         print(f"读取文件错误: {e}")
 
     user = current_user()
-    if ISOLATE_FILES and user and user.get('role') != 'admin':
+    if ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'):
         uid = user.get('id')
         file_list = [f for f in file_list
                      if (records.get(f['name']) or {}).get('uploader_id') == uid]
@@ -559,6 +566,8 @@ def can_manage_file(name, user=None):
     """当前用户是否有权操作这个文件。隔离关闭或管理员时始终允许。"""
     user = user or current_user()
     if not user:
+        return False
+    if user.get('role') == 'guest':
         return False
     if not ISOLATE_FILES or user.get('role') == 'admin':
         return True
@@ -750,6 +759,9 @@ def current_user():
     """返回当前会话对应的用户；用户被删除或被禁用时返回 None"""
     if not AUTH_ENABLED:
         return {'id': None, 'username': 'anonymous', 'role': 'admin'}
+    if session.get('guest'):
+        return {'id': None, 'username': '访客', 'role': 'guest'}
+
     uid = session.get('uid')
     if not uid:
         return None
@@ -771,9 +783,17 @@ def require_login():
 
     if not AUTH_ENABLED:
         return None
-    if request.endpoint in ('login', 'static', 'auth_me', 'share_download', 'healthz', 'api_version'):
+    if request.endpoint in ('login', 'guest_login', 'static', 'auth_me', 'share_download',
+                            'healthz', 'api_version'):
         return None
-    if current_user():
+    user = current_user()
+    if user:
+        # 访客只读：所有写操作（POST/PUT/DELETE/PATCH）一律拒绝
+        if user.get('role') == 'guest' and request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            if _wants_json_error():
+                return jsonify({'status': 'error', 'message': '访客只能浏览和下载文件'}), 403
+            return render_template('error.html', code=403,
+                                   message='访客只能浏览和下载文件'), 403
         return None
     if request.path.startswith(PROTECTED_PREFIXES):
         return jsonify({'status': 'error', 'message': '未登录或登录已过期'}), 401
@@ -920,6 +940,27 @@ def logout():
         return redirect(url_for('index'))
     return redirect(url_for('login'))
 
+@app.route('/guest-login')
+def guest_login():
+    # 以访客身份浏览（只读），是否开放由 [AUTH] guest_browse 控制
+    if not AUTH_ENABLED or not GUEST_BROWSE:
+        return redirect(url_for('login'))
+    session.clear()
+    session['guest'] = True
+    session['username'] = '访客'
+    session['role'] = 'guest'
+    print(f"[登录] 访客进入（{request.remote_addr}）")
+    target = request.args.get('next') or '/'
+    if not target.startswith('/') or target.startswith('//'):
+        target = '/'
+    return redirect(target)
+
+
+@app.context_processor
+def inject_auth_flags():
+    return {'guest_browse': GUEST_BROWSE}
+
+
 @app.route('/auth/me')
 def auth_me():
     """供前端判断当前会话是否仍然有效"""
@@ -1054,6 +1095,14 @@ def admin_change_password():
 # ---- 用户管理 ----
 USERNAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{3,32}$')
 
+VALID_ROLES = ('admin', 'user', 'guest')
+
+
+def _normalize_role(value):
+    """只允许 admin / user / guest，其他一律按普通用户处理"""
+    value = (value or '').strip().lower()
+    return value if value in VALID_ROLES else 'user'
+
 
 def _user_public(row):
     return {
@@ -1081,7 +1130,7 @@ def admin_users_create():
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
-    role = 'admin' if data.get('role') == 'admin' else 'user'
+    role = _normalize_role(data.get('role'))
 
     if not USERNAME_RE.match(username):
         return jsonify({'ok': False, 'message': '用户名需为 3-32 位字母/数字/下划线/点/横线'}), 400
@@ -1139,7 +1188,7 @@ def admin_users_update():
 
     role = row['role']
     if 'role' in data:
-        role = 'admin' if data.get('role') == 'admin' else 'user'
+        role = _normalize_role(data.get('role'))
     active = bool(data.get('active', row.get('active', 1)))
 
     # 保护：不能把自己降级/禁用，也不能把最后一个管理员干掉

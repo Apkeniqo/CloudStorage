@@ -835,3 +835,13 @@ body {
         opacity: 1;
     }
 }
+/* 访客（只读）：隐藏上传入口 */
+.guest-mode .upload-btn-label,
+.guest-mode #file-input {
+    display: none !important;
+}
+
+.guest-mode .file-list-container {
+    /* 没有上传按钮时，列表仍占满高度 */
+    min-height: 0;
+}

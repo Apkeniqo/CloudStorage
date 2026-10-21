@@ -73,8 +73,18 @@ function initApp() {
         .then(data => {
             if (data && data.username) {
                 currentUsername = data.username;
-                if (statusText && statusText.textContent.indexOf('已连接') === 0) {
-                    statusText.textContent = `已连接（实时同步）· ${currentUsername}`;
+                isGuest = data.role === 'guest';
+                if (isGuest) {
+                    document.body.classList.add('guest-mode');
+                    renderFileList();
+                }
+                if (statusText) {
+                    const suffix = isGuest ? '（访客，只读）' : '';
+                    if (statusText.textContent.indexOf('已连接') === 0) {
+                        statusText.textContent = `已连接（实时同步）· ${currentUsername}${suffix}`;
+                    } else {
+                        statusText.textContent = `${currentUsername}${suffix}`;
+                    }
                 }
             }
         })
@@ -319,6 +329,7 @@ function clearSearch() {
 
 // 大列表分批渲染：一次只画一页，滚到底再追加，避免几千个文件卡住页面
 const PAGE_SIZE = 200;
+let isGuest = false;
 let renderedFiles = [];
 let renderedCount = 0;
 const downloadIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
@@ -343,9 +354,9 @@ function fileItemHtml(file) {
                 <a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">
                     ${downloadIconSvg}
                 </a>
-                <button class="action-btn share-btn" data-name="${safeName}" title="分享">${shareIconSvg}</button>
+                ${isGuest ? '' : `<button class="action-btn share-btn" data-name="${safeName}" title="分享">${shareIconSvg}</button>
                 <button class="action-btn rename-btn" data-name="${safeName}" title="重命名">${renameIconSvg}</button>
-                <button class="action-btn delete-btn" data-name="${safeName}" title="删除">${deleteIconSvg}</button>
+                <button class="action-btn delete-btn" data-name="${safeName}" title="删除">${deleteIconSvg}</button>`}
             </div>
         </div>
     `;

@@ -73,6 +73,20 @@
             font-size: 13px;
             color: #d13438;
         }
+.guest-link {
+            display: block;
+            margin-top: 12px;
+            text-align: center;
+            font-size: 13px;
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .guest-link:hover {
+            color: var(--accent-color);
+            text-decoration: underline;
+        }
+
     </style>
 </head>
 <body>
@@ -87,6 +101,10 @@
         <input type="hidden" name="next" value="{{ next }}">
         {% if error %}<div class="error">{{ error }}</div>{% endif %}
         <button type="submit">登录</button>
+
+        {% if guest_browse %}
+        <a class="guest-link" href="/guest-login">以访客身份浏览（只读）</a>
+        {% endif %}
     </form>
 
     <script>
