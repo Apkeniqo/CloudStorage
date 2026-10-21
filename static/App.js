@@ -37,7 +37,7 @@ function initApp() {
     initTheme();
     setViewMode(currentView, false);
 
-    // 删除按钮用事件委托：文件名可能带引号，直接拼 onclick 会坏
+    // 删除/重命名/分享按钮用事件委托：文件名可能带引号，直接拼 onclick 会坏
     if (itemsWrapper) {
         itemsWrapper.addEventListener('click', (e) => {
             const target = e.target;
@@ -60,6 +60,11 @@ function initApp() {
                 shareFile(share.dataset.name);
             }
         });
+    }
+
+    // 滚到底自动加载下一页
+    if (fileContainer) {
+        fileContainer.addEventListener('scroll', maybeAppendMore, { passive: true });
     }
 
     // 取当前登录用户，用于状态栏显示
@@ -292,6 +297,64 @@ function clearSearch() {
     }
 }
 
+// 大列表分批渲染：一次只画一页，滚到底再追加，避免几千个文件卡住页面
+const PAGE_SIZE = 200;
+let renderedFiles = [];
+let renderedCount = 0;
+const downloadIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
+
+function fileItemHtml(file) {
+    const downloadUrl = `/download/${encodeURIComponent(file.name)}`;
+    const safeName = escapeHtml(file.name);
+    return `
+        <div class="file-item">
+            <div class="file-name" title="${safeName}">
+                ${getFileIconSvg(file.name)}
+                <a href="${downloadUrl}" download="${safeName}" class="file-name-link">
+                    ${safeName}
+                </a>
+            </div>
+            <div class="file-size">${formatSize(file.size)}</div>
+            <div class="file-time" title="${file.uploader ? '上传者：' + escapeHtml(file.uploader) : ''}">${formatTime(file.mtime)}</div>
+            <div class="file-action" style="text-align: right;">
+                <a href="${downloadUrl}" download="${file.name}" class="download-btn" title="下载">
+                    ${downloadIconSvg}
+                </a>
+                <button class="share-btn" data-name="${safeName}" title="分享">⇱</button>
+                <button class="rename-btn" data-name="${safeName}" title="重命名">✎</button>
+                <button class="delete-btn" data-name="${safeName}" title="删除">✕</button>
+            </div>
+        </div>
+    `;
+}
+
+function appendFilePage() {
+    if (!itemsWrapper) return;
+    const next = renderedFiles.slice(renderedCount, renderedCount + PAGE_SIZE);
+    if (!next.length) return;
+    itemsWrapper.insertAdjacentHTML('beforeend', next.map(fileItemHtml).join(''));
+    renderedCount += next.length;
+
+    if (fileCount) {
+        const total = renderedFiles.length;
+        const text = searchQuery
+            ? `找到 ${total} 项 (共 ${rawFilesData.length} 项)`
+            : `${total} 项`;
+        fileCount.textContent = renderedCount < total
+            ? `${text} · 已显示 ${renderedCount}`
+            : text;
+    }
+}
+
+function maybeAppendMore() {
+    if (!fileContainer) return;
+    const nearBottom = fileContainer.scrollTop + fileContainer.clientHeight
+        >= fileContainer.scrollHeight - 200;
+    if (nearBottom && renderedCount < renderedFiles.length) {
+        appendFilePage();
+    }
+}
+
 function renderFileList() {
     if (!itemsWrapper) return;
     let files = getSortedFiles();
@@ -300,48 +363,20 @@ function renderFileList() {
         files = files.filter(f => f.name.toLowerCase().includes(searchQuery));
     }
 
-    if (fileCount) {
-        if (searchQuery) {
-            fileCount.textContent = `找到 ${files.length} 项 (共 ${rawFilesData.length} 项)`;
-        } else {
-            fileCount.textContent = `${files.length} 项`;
-        }
-    }
-
     updateHeaderSortIcons();
+
+    renderedFiles = files;
+    renderedCount = 0;
+    itemsWrapper.innerHTML = '';
 
     if (files.length === 0) {
         const emptyMsg = searchQuery ? '未找到匹配的文件' : '暂无文件，点击上方上传';
         itemsWrapper.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
+        if (fileCount) fileCount.textContent = '0 项';
         return;
     }
 
-    const downloadIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
-
-    itemsWrapper.innerHTML = files.map(file => {
-        const downloadUrl = `/download/${encodeURIComponent(file.name)}`;
-        const safeName = escapeHtml(file.name);
-        return `
-            <div class="file-item">
-                <div class="file-name" title="${safeName}">
-                    ${getFileIconSvg(file.name)}
-                    <a href="${downloadUrl}" download="${safeName}" class="file-name-link">
-                        ${safeName}
-                    </a>
-                </div>
-                <div class="file-size">${formatSize(file.size)}</div>
-                <div class="file-time" title="${file.uploader ? '上传者：' + escapeHtml(file.uploader) : ''}">${formatTime(file.mtime)}</div>
-                <div class="file-action" style="text-align: right;">
-                    <a href="${downloadUrl}" download="${file.name}" class="download-btn" title="下载">
-                        ${downloadIconSvg}
-                    </a>
-                    <button class="share-btn" data-name="${safeName}" title="分享">⇱</button>
-                    <button class="rename-btn" data-name="${safeName}" title="重命名">✎</button>
-                    <button class="delete-btn" data-name="${safeName}" title="删除">✕</button>
-                </div>
-            </div>
-        `;
-    }).join('');
+    appendFilePage();
 }
 
 // 生成分享链接
