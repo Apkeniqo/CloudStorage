@@ -5,6 +5,7 @@ import time
 import shutil
 import secrets
 import hashlib
+import binascii
 import getpass
 import argparse
 import logging
@@ -1187,13 +1188,35 @@ def upload_chunk():
         if chunk_path is None:
             return jsonify({'status': 'error', 'message': '路径非法'}), 400
 
+        # 可选：客户端算好的 CRC32（十六进制），落盘时同步计算并比对
+        expected_crc = (request.headers.get('X-Chunk-Crc32') or '').strip().lower()
+        if expected_crc and not re.fullmatch(r'[0-9a-f]{8}', expected_crc):
+            return jsonify({'status': 'error', 'message': 'CRC 格式非法'}), 400
+
         # 先写 .part 再原子改名：断点续传时绝不会把写了一半的切片当成“已完成”
         part_path = chunk_path + '.part'
+        crc = 0
         try:
             with open(part_path, 'wb') as f:
-                shutil.copyfileobj(source, f, length=4 * 1024 * 1024)
+                if expected_crc:
+                    while True:
+                        block = source.read(4 * 1024 * 1024)
+                        if not block:
+                            break
+                        crc = binascii.crc32(block, crc)
+                        f.write(block)
+                else:
+                    shutil.copyfileobj(source, f, length=4 * 1024 * 1024)
                 f.flush()
                 os.fsync(f.fileno())
+
+            if expected_crc:
+                actual = format(crc & 0xFFFFFFFF, '08x')
+                if actual != expected_crc:
+                    os.remove(part_path)
+                    print(f"[切片校验失败] {file_hash}#{chunk_index}: 期望 {expected_crc} 实际 {actual}")
+                    return jsonify({'status': 'error', 'message': '切片校验失败，请重传'}), 400
+
             os.replace(part_path, chunk_path)
         except Exception:
             try:

@@ -366,6 +366,31 @@ async function shareFile(name) {
     }
 }
 
+// ---- 切片 CRC32（传输完整性校验）----
+const CRC_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+        let c = i;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[i] = c >>> 0;
+    }
+    return table;
+})();
+
+async function chunkCrc32(blob) {
+    // 分片读，避免一次性把大切片读进内存
+    const SLICE = 4 * 1024 * 1024;
+    let crc = 0xFFFFFFFF;
+    for (let offset = 0; offset < blob.size; offset += SLICE) {
+        const bytes = new Uint8Array(await blob.slice(offset, offset + SLICE).arrayBuffer());
+        for (let i = 0; i < bytes.length; i++) {
+            crc = (crc >>> 8) ^ CRC_TABLE[(crc ^ bytes[i]) & 0xFF];
+        }
+    }
+    crc = (crc ^ 0xFFFFFFFF) >>> 0;
+    return crc.toString(16).padStart(8, '0');
+}
+
 // 重命名文件
 async function renameFile(name) {
     if (!name) return;
@@ -664,17 +689,30 @@ async function uploadLargeFileChunks(file, taskId) {
         return new Promise((resolve, reject) => {
             let retryCount = 0;
             const maxRetries = 3;
+            const start = chunkIndex * chunkSize;
+            const end = Math.min(file.size, start + chunkSize);
+            const chunk = file.slice(start, end);
 
-            const doUpload = () => {
+            // 每片只算一次 CRC（重试时复用），算不出来就不带校验头
+            let crcPromise = null;
+            const getCrc = () => {
+                if (!crcPromise) {
+                    crcPromise = chunkCrc32(chunk).catch(() => null);
+                }
+                return crcPromise;
+            };
+
+            const doUpload = async () => {
                 const task = uploadTasks.get(taskId);
                 // 双重容错校验，防止 task 丢失
                 if (!task || task.isCancelled) {
                     return reject(new Error('cancelled'));
                 }
 
-                const start = chunkIndex * chunkSize;
-                const end = Math.min(file.size, start + chunkSize);
-                const chunk = file.slice(start, end);
+                const crc = await getCrc();
+                if (!task || task.isCancelled) {
+                    return reject(new Error('cancelled'));
+                }
 
                 const xhr = new XMLHttpRequest();
                 task.activeXHRs.add(xhr);
@@ -733,10 +771,13 @@ async function uploadLargeFileChunks(file, taskId) {
                 xhr.setRequestHeader('X-File-Hash', fileHash);
                 xhr.setRequestHeader('X-Chunk-Index', String(chunkIndex));
                 xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                if (crc) {
+                    xhr.setRequestHeader('X-Chunk-Crc32', crc);
+                }
                 xhr.send(chunk);
             };
 
-            doUpload();
+            doUpload().catch(() => reject(new Error('Network error')));
         });
     };
 
