@@ -433,7 +433,9 @@
             const { ok, data } = await postJSON('/admin/config', payload);
             if (ok && data.ok) {
                 showToast('config-toast', true, data.message || '已保存');
-                if ((data.applied || []).length) {
+                if (data.restarting) {
+                    waitForRestart();
+                } else if ((data.applied || []).length) {
                     setTimeout(() => location.reload(), 1200);
                 }
             } else {
@@ -532,6 +534,7 @@
                     <div class="u-meta">${fmtTime(u.last_login_at)}</div>
                     <div class="u-ops">
                         <button onclick="resetPassword(${u.id}, '${encodeURIComponent(u.username)}')">改密</button>
+                        <button onclick="renameUser(${u.id}, '${encodeURIComponent(u.username)}')">改名</button>
                         <button onclick="toggleUser(${u.id}, ${u.active ? 'false' : 'true'})">${u.active ? '禁用' : '启用'}</button>
                         <button onclick="setRole(${u.id}, '${u.role === 'admin' ? 'user' : 'admin'}')">${u.role === 'admin' ? '降为用户' : '设为管理员'}</button>
                         <button class="danger" onclick="removeUser(${u.id}, '${encodeURIComponent(u.username)}')">删除</button>
@@ -566,6 +569,15 @@
         afterUserAction(postJSON('/admin/users/password', { id, password: pw }));
     }
 
+    function renameUser(id, encoded) {
+        const name = decodeURIComponent(encoded);
+        const next = prompt(`把用户「${name}」改名为：`, name);
+        if (next === null) return;
+        const username = next.trim();
+        if (!username || username === name) return;
+        afterUserAction(postJSON('/admin/users/rename', { id, username }));
+    }
+
     function toggleUser(id, active) {
         afterUserAction(postJSON('/admin/users/update', { id, active }));
     }
@@ -578,6 +590,27 @@
         const name = decodeURIComponent(encoded);
         if (!confirm(`删除用户「${name}」？账号会立即失效，但已上传的文件保留。`)) return;
         afterUserAction(postJSON('/admin/users/delete', { id }));
+    }
+
+    // 配置变更需要重启时：轮询 /healthz，服务回来后自动刷新
+    function waitForRestart() {
+        const toast = document.getElementById('config-toast');
+        if (toast) {
+            toast.className = 'toast show ok';
+            toast.textContent = '配置已保存，服务正在重启，页面会自动刷新…';
+        }
+        let tries = 0;
+        const timer = setInterval(async () => {
+            tries++;
+            if (tries > 90) { clearInterval(timer); return; }
+            try {
+                const res = await fetch('/healthz', { cache: 'no-store' });
+                if (res.ok) {
+                    clearInterval(timer);
+                    location.reload();
+                }
+            } catch (e) { /* 重启中 */ }
+        }, 1000);
     }
 
     // 跟随主界面的主题

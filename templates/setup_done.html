@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>初始化完成 - CloudStorage</title>
+    <link rel="stylesheet" href="/static/Style.css">
+    <style>
+        .done-card {
+            max-width: 460px;
+            width: 100%;
+            background: var(--card-bg);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--card-border);
+            border-radius: calc(var(--radius) * 1.5);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
+            padding: 30px 26px;
+        }
+
+        .done-card h1 {
+            margin: 0 0 10px;
+            font-size: 19px;
+            font-weight: 600;
+        }
+
+        .done-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.7;
+            margin: 0 0 8px;
+        }
+
+        .done-card code {
+            background: var(--hover-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .done-card a.btn {
+            display: inline-block;
+            margin-top: 18px;
+            padding: 9px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent-color);
+            border-radius: var(--radius);
+            text-decoration: none;
+        }
+
+        .done-card a.btn:hover { background: var(--accent-hover); }
+    </style>
+</head>
+<body>
+    <div class="done-card">
+        <h1>初始化完成</h1>
+        <p>管理员账号：<code>{{ username }}</code></p>
+        <p>存储目录：<code>{{ target }}</code></p>
+
+        {% if restarted %}
+        <p id="tip">服务正在自动重启以应用新的存储路径，页面稍后会自动跳转到登录页……</p>
+        <a class="btn" href="/login">现在去登录</a>
+        {% else %}
+        <p id="tip">配置已保存，但未能自动重启（或当前环境不允许）。请手动重启服务后再登录。</p>
+        <a class="btn" href="/login">去登录</a>
+        {% endif %}
+    </div>
+
+    <script>
+        {% if restarted %}
+        // 等重启完成后跳登录页；连续探测成功再跳，避免跳到还没起来的服务
+        let tries = 0;
+        const timer = setInterval(async () => {
+            tries++;
+            try {
+                const res = await fetch('/healthz', { cache: 'no-store' });
+                if (res.ok) {
+                    clearInterval(timer);
+                    location.href = '/login';
+                }
+            } catch (e) { /* 重启中，继续等 */ }
+            if (tries > 60) clearInterval(timer);
+        }, 1000);
+        {% endif %}
+
+        (function () {
+            var saved = localStorage.getItem('fluent_theme') || 'system';
+            var dark = saved === 'dark' ||
+                (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+</body>
+</html>

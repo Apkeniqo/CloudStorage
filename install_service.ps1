@@ -114,44 +114,9 @@ if ($Port -eq 80 -or $Port -eq 443) {
     throw "端口 $Port 会被运营商封锁，请先把 config.ini 的 [SERVER] port 改成 5000 / 8080 / 8443 等端口。"
 }
 
-# 管理员初始密码（只在数据库里还没有用户时使用）
-$pwMatch = Select-String -Path $configPath -Pattern '^\s*admin_password\s*=\s*(.*)$' | Select-Object -First 1
-# 注意：PowerShell 变量名大小写不敏感，这里不能叫 $adminPassword，
-# 否则会把参数 $AdminPassword 覆盖成空字符串。
-$configAdminPassword = if ($pwMatch) { $pwMatch.Matches[0].Groups[1].Value.Trim() } else { '' }
-
-if (-not $configAdminPassword) {
-    $plain = $AdminPassword
-    if (-not $plain) {
-        $interactive = $true
-        try { $interactive = -not [Console]::IsInputRedirected } catch { }
-
-        Write-Host ''
-        Write-Host 'config.ini 里还没有管理员初始密码（admin_password）。' -ForegroundColor Yellow
-        Write-Host '首次启动会创建 admin 账号；不设置密码的话会随机生成，并写进 logs\cloudstorage.log。'
-        if ($interactive) {
-            try {
-                $secure = Read-Host '请输入 admin 的初始密码（至少 6 位，直接回车跳过）' -AsSecureString
-                $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
-                try { $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
-                finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
-            }
-            catch {
-                $plain = ''
-            }
-        }
-        else {
-            Write-Host '当前不是交互式终端，跳过密码设置（可用 -AdminPassword 参数指定）。' -ForegroundColor Yellow
-        }
-    }
-    if ($plain) {
-        if ($plain.Length -lt 6) { throw '密码至少 6 位。' }
-        Set-ConfigValue -Path $configPath -Section 'AUTH' -Key 'admin_password' -Value $plain
-        Write-Host '已写入 config.ini 的 [AUTH] admin_password。'
-    }
-    else {
-        Write-Host '已跳过：首次启动后可在 logs\cloudstorage.log 里找到随机生成的密码。' -ForegroundColor Yellow
-    }
+# 首次运行改为网页初始化向导（/setup），这里不再询问管理员密码
+if ($AdminPassword) {
+    Write-Host "提示：管理员账号现在在网页 /setup 向导里创建，-AdminPassword 参数已不再需要。" -ForegroundColor Yellow
 }
 
 # ---------------------------------------------------------------- 3. Python 环境

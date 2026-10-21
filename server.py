@@ -10,6 +10,7 @@ import getpass
 import argparse
 import logging
 import threading
+import subprocess
 import traceback
 import configparser
 from datetime import timedelta
@@ -479,17 +480,16 @@ except Exception as e:
 
 print(f"[数据库] SQLite: {DB_PATH}")
 
-# 首次启动：没有任何用户时创建管理员
-if db.count_users() == 0:
-    _initial_password = ADMIN_PASSWORD or secrets.token_urlsafe(12)
-    db.create_user(ADMIN_USER, generate_password_hash(_initial_password), 'admin')
+# 是否运行在 Windows 服务里（service.py 会设置该环境变量）
+IS_SERVICE = os.environ.get('CLOUDSTORAGE_SERVICE') == '1'
+
+# 首次启动：还没有任何用户时进入网页初始化向导，不再自动建随机密码的账号
+SETUP_REQUIRED = db.count_users() == 0
+if SETUP_REQUIRED:
     print("=" * 64)
-    print(f"[初始化] 已创建管理员账号：{ADMIN_USER}")
-    if ADMIN_PASSWORD:
-        print("[初始化] 密码取自 config.ini 的 [AUTH] admin_password")
-    else:
-        print(f"[初始化] 初始密码：{_initial_password}")
-        print("[初始化] 建议登录后立即修改：python server.py --set-password admin")
+    print("[初始化] 还没有任何账号，请打开网页完成初始化：")
+    print("         http://<本机IP>:<端口>/setup")
+    print("[初始化] 在向导里设置存储路径、管理员用户名和密码。")
     print("=" * 64)
 
 # 更新 Flask 配置
@@ -761,6 +761,14 @@ def current_user():
 
 @app.before_request
 def require_login():
+    # 还没完成初始化：只放行向导、静态资源和健康检查
+    if SETUP_REQUIRED:
+        if request.endpoint in ('setup', 'static') or request.path.startswith('/static/'):
+            return None
+        if request.path == '/healthz':
+            return None
+        return redirect(url_for('setup'))
+
     if not AUTH_ENABLED:
         return None
     if request.endpoint in ('login', 'static', 'auth_me', 'share_download', 'healthz', 'api_version'):
@@ -1012,9 +1020,13 @@ def admin_save_config():
     audit('config', '', ','.join(applied))
 
     message = f'已保存 {len(applied)} 项'
+    restarted = False
     if restart:
-        message += '，其中 ' + '、'.join(restart) + ' 需要重启服务后生效'
-    return jsonify({'ok': True, 'message': message, 'applied': applied, 'restart': restart})
+        restarted = schedule_restart('配置变更：' + '、'.join(restart))
+        message += ('，服务正在自动重启' if restarted
+                    else '，其中 ' + '、'.join(restart) + ' 需要手动重启服务后生效')
+    return jsonify({'ok': True, 'message': message, 'applied': applied,
+                    'restart': restart, 'restarting': restarted})
 
 
 @app.route('/admin/password', methods=['POST'])
@@ -1143,6 +1155,38 @@ def admin_users_update():
     return jsonify({'ok': True, 'message': '已保存'})
 
 
+@app.route('/admin/users/rename', methods=['POST'])
+def admin_users_rename():
+    me = _require_admin()
+    if not _csrf_ok():
+        return jsonify({'ok': False, 'message': '页面已过期，请刷新后重试'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = int(data.get('id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'message': '用户 ID 非法'}), 400
+    username = (data.get('username') or '').strip()
+
+    if not USERNAME_RE.match(username):
+        return jsonify({'ok': False, 'message': '用户名需为 3-32 位字母/数字/下划线/点/横线'}), 400
+    row = db.get_user_by_id(uid)
+    if not row:
+        return jsonify({'ok': False, 'message': '用户不存在'}), 404
+    if username.lower() == row['username'].lower():
+        return jsonify({'ok': True, 'message': '用户名没有变化'})
+    existed = db.get_user(username)
+    if existed and existed['id'] != uid:
+        return jsonify({'ok': False, 'message': '用户名已存在'}), 409
+
+    db.rename_user(uid, username)
+    if uid == me['id']:
+        session['username'] = username
+    audit('user_rename', row['username'], f'-> {username}')
+    print(f"[用户] {me['username']} 把 {row['username']} 改名为 {username}")
+    return jsonify({'ok': True, 'message': f'已改名为 {username}'})
+
+
 @app.route('/admin/users/delete', methods=['POST'])
 def admin_users_delete():
     me = _require_admin()
@@ -1168,6 +1212,123 @@ def admin_users_delete():
     print(f"[用户] {me['username']} 删除了 {row['username']}")
     return jsonify({'ok': True, 'message': f"已删除 {row['username']}"})
 
+
+
+# ---------------------------------------------------------------- 自动重启
+_restart_lock = threading.Lock()
+_restart_scheduled = False
+
+
+def schedule_restart(reason='配置变更', delay=1.5):
+    """保存需要重启的配置后，拉起一个脱离的助手进程，停掉自己再重新启动。"""
+    global _restart_scheduled
+    with _restart_lock:
+        if _restart_scheduled:
+            print(f"[重启] 已在计划中，忽略重复请求（{reason}）")
+            return True
+        _restart_scheduled = True
+
+    if os.environ.get('CLOUDSTORAGE_NO_RESTART') == '1':
+        print(f"[重启] {reason}：已禁用自动重启（CLOUDSTORAGE_NO_RESTART=1）")
+        return False
+
+    helper = os.path.join(BASE_DIR, 'restart_helper.py')
+    if not os.path.isfile(helper):
+        print(f"[重启] 缺少 {helper}，请手动重启服务")
+        return False
+
+    mode = 'service' if IS_SERVICE else 'process'
+    script = os.path.abspath(sys.argv[0]) if sys.argv else os.path.join(BASE_DIR, 'server.py')
+    args = [sys.executable, helper, mode, str(os.getpid()), str(delay),
+            sys.executable, script] + sys.argv[1:]
+
+    flags = 0
+    if os.name == 'nt':
+        flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    try:
+        subprocess.Popen(args, cwd=BASE_DIR, close_fds=True, creationflags=flags,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as e:
+        print(f"[重启] 拉起重启助手失败：{e}")
+        return False
+
+    print(f"[重启] {reason}：{delay}s 后自动重启（{mode}）")
+    threading.Timer(delay, _restart_now).start()
+    return True
+
+
+def _restart_now():
+    try:
+        if IS_SERVICE:
+            subprocess.run(['sc.exe', 'stop', 'CloudStorage'], timeout=20,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            os._exit(0)
+    except Exception as e:
+        print(f"[重启] 停止自身失败：{e}")
+        os._exit(1)
+
+
+# ---------------------------------------------------------------- 首次初始化向导
+def _resolve_web_path(raw):
+    raw = (raw or '').strip()
+    if not raw:
+        return None
+    if os.path.isabs(raw):
+        return os.path.abspath(raw)
+    return os.path.abspath(os.path.join(BASE_DIR, raw))
+
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    global SETUP_REQUIRED
+
+    if not SETUP_REQUIRED:
+        return redirect(url_for('index'))
+
+    error = None
+    form = {
+        'upload_folder': config.get('PATH', 'upload_folder', fallback='CloudStorage/Files'),
+        'admin_user': ADMIN_USER,
+    }
+
+    if request.method == 'POST':
+        form['upload_folder'] = (request.form.get('upload_folder') or '').strip()
+        form['admin_user'] = (request.form.get('admin_user') or '').strip()
+        password = request.form.get('password') or ''
+        confirm = request.form.get('confirm') or ''
+
+        target = _resolve_web_path(form['upload_folder'])
+        if not target:
+            error = '请填写存储路径'
+        elif not USERNAME_RE.match(form['admin_user']):
+            error = '用户名需为 3-32 位字母/数字/下划线/点/横线'
+        elif len(password) < 6:
+            error = '密码至少 6 位'
+        elif password != confirm:
+            error = '两次输入的密码不一致'
+        else:
+            try:
+                os.makedirs(target, exist_ok=True)
+                probe = os.path.join(target, '.setup_probe')
+                with open(probe, 'w', encoding='utf-8') as fp:
+                    fp.write('ok')
+                os.remove(probe)
+            except OSError as e:
+                error = f'存储路径不可写：{e}'
+            else:
+                update_config_values({
+                    ('PATH', 'upload_folder'): form['upload_folder'],
+                    ('AUTH', 'admin_user'): form['admin_user'],
+                })
+                db.create_user(form['admin_user'], generate_password_hash(password), 'admin')
+                SETUP_REQUIRED = False
+                print(f"[初始化] 已创建管理员 {form['admin_user']}，存储目录 {target}")
+                restarted = schedule_restart('初始化完成')
+                return render_template('setup_done.html', restarted=restarted,
+                                       target=target, username=form['admin_user'])
+
+    return render_template('setup.html', error=error, form=form)
 
 # --- Socket.IO 事件绑定 ---
 @socketio.on('connect')

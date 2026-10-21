@@ -54,6 +54,8 @@ class ServerRunner:
         self.listen_sock = None
 
     def start(self):
+        # 告诉 server.py 当前跑在 Windows 服务里（自动重启走 sc start）
+        os.environ['CLOUDSTORAGE_SERVICE'] = '1'
         import server  # 放在这里导入：先装好日志，模块初始化的 print 才不会丢
 
         self.server = server

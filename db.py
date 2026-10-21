@@ -151,6 +151,12 @@ def set_password(user_id, password_hash):
     return _write("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
 
 
+def rename_user(user_id, username):
+    """改用户名，并把历史文件记录里的上传者名字一起改掉"""
+    _write("UPDATE users SET username = ? WHERE id = ?", (username, user_id))
+    return _write("UPDATE files SET uploader_name = ? WHERE uploader_id = ?", (username, user_id))
+
+
 def set_role(user_id, role):
     return _write("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
 
