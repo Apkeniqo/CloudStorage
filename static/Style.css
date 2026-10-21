@@ -694,50 +694,114 @@ body {
     color: var(--text-secondary);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
     body {
-        padding: 8px; /* 减小外边距 */
+        padding: 0;
+        align-items: stretch;
     }
 
     .container {
-        height: 96vh; /* 移动端提升容器可用高度 */
-        border-radius: var(--radius);
+        height: 100vh;
+        height: 100dvh;
+        max-width: 100%;
+        border-radius: 0;
+        border: none;
     }
 
     .header {
         padding: 10px 12px;
+        gap: 8px;
     }
 
+    .title {
+        font-size: 15px;
+    }
+
+    /* 工具栏换行：搜索框单独一行，其余按钮排在下面 */
     .toolbar {
-        width: 100%; /* 工具栏占满整行 */
+        width: 100%;
+        flex-wrap: wrap;
         justify-content: flex-end;
+        gap: 6px;
     }
 
-    /* 搜索框在移动端占满可用空间 */
     .search-box {
-        flex: 1;
-        min-width: 120px;
-        width: 100% !important; 
+        flex: 1 1 100%;
+        order: -1;
+        width: 100% !important;
+        min-width: 0;
+    }
+
+    /* 触摸目标不小于 40px */
+    .btn-icon {
+        min-width: 40px;
+        min-height: 40px;
     }
 
     .upload-btn-label {
-        padding: 6px 10px;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        padding: 0 12px;
         font-size: 13px;
         white-space: nowrap;
     }
 
     .file-list-container {
-        padding: 8px 12px;
+        padding: 8px;
     }
 
-    .view-list .file-header, .view-list .file-item {
-        grid-template-columns: 1fr 65px 40px;
-        gap: 6px;
+    /* 列表视图：两行布局（名称+大小 / 操作），隐藏表头与时间 */
+    .view-list .file-header {
+        display: none;
     }
+
+    .view-list .file-item {
+        grid-template-columns: 1fr auto;
+        gap: 4px 8px;
+        padding: 10px 8px;
+        font-size: 13px;
+    }
+
+    .view-list .file-name {
+        grid-column: 1;
+        grid-row: 1;
+        font-size: 13px;
+    }
+
+    .view-list .file-size {
+        grid-column: 2;
+        grid-row: 1;
+        text-align: right;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
     .view-list .file-time {
         display: none;
     }
-    .view-list .file-name {
-    font-size: 13px;
+
+    .view-list .file-action {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        text-align: right;
+    }
+
+    .view-list .file-action a,
+    .view-list .file-action button {
+        padding: 8px;
+    }
+
+    /* 图标视图：卡片窄一点，操作按钮常驻（触屏没有 hover） */
+    .view-grid #file-items-wrapper {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 10px;
+    }
+}
+
+/* 触屏设备：没有 hover，图标视图的按钮必须一直可见 */
+@media (hover: none) {
+    .view-grid .file-action {
+        opacity: 1;
     }
 }
