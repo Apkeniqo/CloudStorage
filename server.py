@@ -7,6 +7,7 @@ import secrets
 import hashlib
 import getpass
 import argparse
+import logging
 import threading
 import traceback
 import configparser
@@ -19,6 +20,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 import db
+import logutil
 
 MIN_PYTHON = (3, 9)
 if sys.version_info < MIN_PYTHON:
@@ -155,6 +157,16 @@ SETTING_SPECS = [
      'label': '启用登录', 'help': '关闭后所有人可直接访问；改动需重启'},
     {'group': '认证', 'key': 'admin_user', 'section': 'AUTH', 'type': 'str', 'restart': True,
      'label': '管理员用户名', 'help': '仅在数据库里还没有任何用户时用于创建首个管理员'},
+
+    {'group': '日志', 'key': 'max_total_mb', 'section': 'LOG', 'type': 'int', 'restart': False,
+     'label': '日志目录上限 (MB)', 'min': 1, 'max': 102400,
+     'help': 'logs 目录超过这个大小就开始删除最旧的日志'},
+    {'group': '日志', 'key': 'max_age_days', 'section': 'LOG', 'type': 'int', 'restart': False,
+     'label': '日志保留天数', 'min': 0, 'max': 3650, 'help': '0 表示不按时间清理'},
+    {'group': '日志', 'key': 'max_files', 'section': 'LOG', 'type': 'int', 'restart': False,
+     'label': '最多保留文件数', 'min': 1, 'max': 1000},
+    {'group': '日志', 'key': 'check_interval_seconds', 'section': 'LOG', 'type': 'int',
+     'restart': False, 'label': '日志检查间隔 (秒)', 'min': 10, 'max': 86400},
 ]
 
 
@@ -245,6 +257,7 @@ def update_config_values(pairs):
 def hot_apply(keys):
     """把不需要重启的配置立刻应用到内存"""
     global MAX_CONTENT_LENGTH_MB, MAX_CONTENT_LENGTH, CHUNK_EXPIRE_SECONDS, CLEANUP_INTERVAL_SECONDS
+    global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL
 
     if 'max_content_length_mb' in keys:
         MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb',
@@ -257,6 +270,15 @@ def hot_apply(keys):
     if 'cleanup_interval_seconds' in keys:
         CLEANUP_INTERVAL_SECONDS = config.getint('CLEANUP', 'cleanup_interval_seconds',
                                                  fallback=CLEANUP_INTERVAL_SECONDS)
+    if 'max_total_mb' in keys:
+        LOG_MAX_TOTAL_MB = config.getint('LOG', 'max_total_mb', fallback=LOG_MAX_TOTAL_MB)
+    if 'max_age_days' in keys:
+        LOG_MAX_AGE_DAYS = config.getint('LOG', 'max_age_days', fallback=LOG_MAX_AGE_DAYS)
+    if 'max_files' in keys:
+        LOG_MAX_FILES = config.getint('LOG', 'max_files', fallback=LOG_MAX_FILES)
+    if 'check_interval_seconds' in keys:
+        LOG_CHECK_INTERVAL = config.getint('LOG', 'check_interval_seconds',
+                                           fallback=LOG_CHECK_INTERVAL)
 
 
 def apply_config_changes(payload):
@@ -341,6 +363,14 @@ MAX_CONTENT_LENGTH = MAX_CONTENT_LENGTH_MB * 1024 * 1024
 
 CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds', fallback=3600)
 CLEANUP_INTERVAL_SECONDS = config.getint('CLEANUP', 'cleanup_interval_seconds', fallback=300)
+
+# 日志保留策略（logs 目录默认 100MB 上限，超了删最旧的）
+LOG_DIR = logutil.LOG_DIR
+LOG_FILE = logutil.LOG_FILE
+LOG_MAX_TOTAL_MB = config.getint('LOG', 'max_total_mb', fallback=100)
+LOG_MAX_AGE_DAYS = config.getint('LOG', 'max_age_days', fallback=30)
+LOG_MAX_FILES = config.getint('LOG', 'max_files', fallback=20)
+LOG_CHECK_INTERVAL = config.getint('LOG', 'check_interval_seconds', fallback=600)
 
 # 单个文件允许的最大切片数，防止恶意的 totalChunks 拖死合并线程
 MAX_TOTAL_CHUNKS = 10000
@@ -1090,8 +1120,60 @@ def validate_bind_port():
         )
 
 
+def _log_maintenance_msg(msg):
+    """日志维护自己的消息：总是写进日志文件；控制台模式下同时打印"""
+    logging.getLogger('cloudstorage').info(msg)
+    if not isinstance(sys.stdout, logutil._StreamToLogger):
+        print(msg)
+
+
+def prune_logs_now(reason=''):
+    """按当前策略清理日志，返回被删掉的文件名列表"""
+    removed = logutil.prune_logs(
+        max_total_bytes=LOG_MAX_TOTAL_MB * 1024 * 1024,
+        max_age_days=LOG_MAX_AGE_DAYS,
+        max_files=LOG_MAX_FILES,
+    )
+    if removed:
+        msg = f"[日志] 已清理 {len(removed)} 个旧日志（{', '.join(removed)}）"
+        if reason:
+            msg += f"，原因：{reason}"
+        _log_maintenance_msg(msg)
+    return removed
+
+
+def start_log_maintenance():
+    """后台线程：定时检查 logs 目录的文件数与总大小，超标就删最旧的"""
+
+    def loop():
+        # 启动时先扫一遍，避免上次异常退出留下的堆积
+        try:
+            prune_logs_now('启动检查')
+        except Exception as e:
+            _log_maintenance_msg(f"[日志] 启动检查失败: {e}")
+
+        while True:
+            try:
+                time.sleep(max(10, LOG_CHECK_INTERVAL))
+                total = logutil.dir_size()
+                limit = LOG_MAX_TOTAL_MB * 1024 * 1024
+                if total > limit:
+                    prune_logs_now(f'目录 {total / 1024 / 1024:.1f}MB 超过上限 {LOG_MAX_TOTAL_MB}MB')
+                else:
+                    # 未超限也可能有过期文件，按文件数与天数清理
+                    prune_logs_now()
+            except Exception as e:
+                _log_maintenance_msg(f"[日志] 巡检异常: {e}")
+
+    thread = threading.Thread(target=loop, daemon=True, name='log-maintenance')
+    thread.start()
+    _log_maintenance_msg(
+        f"[启动] 日志巡检已开启（上限 {LOG_MAX_TOTAL_MB}MB / 保留 {LOG_MAX_AGE_DAYS} 天 / 每 {LOG_CHECK_INTERVAL}s 检查）")
+    return thread
+
+
 def start_background_workers():
-    """启动 watchdog 与切片清理线程（命令行运行与服务模式共用）"""
+    """启动 watchdog、切片清理与日志巡检线程（命令行运行与服务模式共用）"""
     try:
         observer = Observer()
         observer.schedule(FileChangeHandler(), app.config['UPLOAD_FOLDER'], recursive=False)
@@ -1103,6 +1185,8 @@ def start_background_workers():
     cleanup_thread = threading.Thread(target=auto_cleanup_stale_chunks, daemon=True)
     cleanup_thread.start()
     print("[启动] 切片自动清理已开启")
+
+    start_log_maintenance()
 
 
 def create_listen_socket(host, port):
@@ -1162,6 +1246,10 @@ if __name__ == '__main__':
     exit_code = run_cli(sys.argv[1:])
     if exit_code is not None:
         raise SystemExit(exit_code)
+
+    # 命令行直接运行时也写文件日志（服务模式由 service.py 用 redirect=True 初始化）
+    log_path = logutil.setup_logging(redirect=False)
+    print(f"[启动] 日志文件: {log_path}")
 
     print_runtime_summary()
     start_background_workers()

@@ -27,51 +27,19 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-LOG_DIR = os.path.join(BASE_DIR, 'logs')
-LOG_FILE = os.path.join(LOG_DIR, 'cloudstorage.log')
+import logutil
+
+LOG_DIR = logutil.LOG_DIR
+LOG_FILE = logutil.LOG_FILE
 
 logger = logging.getLogger('cloudstorage')
 
 
 # ---------------------------------------------------------------- 日志
 
-class _StreamToLogger:
-    """服务进程没有控制台，把 print() 的输出转进日志文件"""
-
-    def __init__(self, level):
-        self.level = level
-        self.buffer = ''
-
-    def write(self, text):
-        self.buffer += text
-        while '\n' in self.buffer:
-            line, self.buffer = self.buffer.split('\n', 1)
-            if line.strip():
-                logger.log(self.level, line)
-
-    def flush(self):
-        if self.buffer.strip():
-            logger.log(self.level, self.buffer.strip())
-        self.buffer = ''
-
-    def isatty(self):
-        return False
-
-
 def setup_logging(redirect=False):
     """文件日志；redirect=True 时接管 stdout/stderr（服务模式没有控制台）"""
-    os.makedirs(LOG_DIR, exist_ok=True)
-    root = logging.getLogger()
-    if not any(isinstance(h, logging.handlers.RotatingFileHandler) for h in root.handlers):
-        handler = logging.handlers.RotatingFileHandler(
-            LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=5, encoding='utf-8')
-        handler.setFormatter(logging.Formatter('%(asctime)s [%(levelname)s] %(message)s'))
-        root.addHandler(handler)
-        root.setLevel(logging.INFO)
-
-    if redirect:
-        sys.stdout = _StreamToLogger(logging.INFO)
-        sys.stderr = _StreamToLogger(logging.ERROR)
+    return logutil.setup_logging(redirect=redirect)
 
 
 # ---------------------------------------------------------------- 服务主体
