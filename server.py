@@ -673,14 +673,14 @@ def auto_cleanup_stale_chunks():
 PROTECTED_PREFIXES = ('/upload', '/download', '/socket.io')
 
 def current_user():
-    """返回当前会话对应的用户，未登录或用户已被删除时返回 None"""
+    """返回当前会话对应的用户；用户被删除或被禁用时返回 None"""
     if not AUTH_ENABLED:
         return {'id': None, 'username': 'anonymous', 'role': 'admin'}
     uid = session.get('uid')
     if not uid:
         return None
     user = db.get_user_by_id(uid)
-    if not user:
+    if not user or not user.get('active', 1):
         session.clear()
         return None
     return user
@@ -708,7 +708,9 @@ def login():
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
         user = db.get_user(username) if username else None
-        if user and check_password_hash(user['password_hash'], password):
+        if user and not user.get('active', 1):
+            error = '账号已被禁用，请联系管理员'
+        elif user and check_password_hash(user['password_hash'], password):
             session.clear()
             session['uid'] = user['id']
             session['username'] = user['username']
@@ -834,6 +836,133 @@ def admin_change_password():
 
     db.set_password(user['id'], generate_password_hash(new))
     return jsonify({'ok': True, 'message': '密码已更新，下次登录请使用新密码'})
+
+
+# ---- 用户管理 ----
+USERNAME_RE = re.compile(r'^[A-Za-z0-9_.\-]{3,32}$')
+
+
+def _user_public(row):
+    return {
+        'id': row['id'],
+        'username': row['username'],
+        'role': row['role'],
+        'active': bool(row.get('active', 1)),
+        'created_at': row['created_at'],
+        'last_login_at': row['last_login_at'],
+    }
+
+
+@app.route('/admin/users')
+def admin_users():
+    _require_admin()
+    return jsonify({'users': [_user_public(r) for r in db.list_users()]})
+
+
+@app.route('/admin/users/create', methods=['POST'])
+def admin_users_create():
+    me = _require_admin()
+    if not _csrf_ok():
+        return jsonify({'ok': False, 'message': '页面已过期，请刷新后重试'}), 400
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    role = 'admin' if data.get('role') == 'admin' else 'user'
+
+    if not USERNAME_RE.match(username):
+        return jsonify({'ok': False, 'message': '用户名需为 3-32 位字母/数字/下划线/点/横线'}), 400
+    if len(password) < 6:
+        return jsonify({'ok': False, 'message': '密码至少 6 位'}), 400
+    if db.get_user(username):
+        return jsonify({'ok': False, 'message': '用户名已存在'}), 409
+
+    db.create_user(username, generate_password_hash(password), role)
+    print(f"[用户] {me['username']} 创建了 {username}（{role}）")
+    return jsonify({'ok': True, 'message': f'已创建 {username}'})
+
+
+@app.route('/admin/users/password', methods=['POST'])
+def admin_users_password():
+    me = _require_admin()
+    if not _csrf_ok():
+        return jsonify({'ok': False, 'message': '页面已过期，请刷新后重试'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = int(data.get('id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'message': '用户 ID 非法'}), 400
+    password = data.get('password') or ''
+    if len(password) < 6:
+        return jsonify({'ok': False, 'message': '密码至少 6 位'}), 400
+
+    row = db.get_user_by_id(uid)
+    if not row:
+        return jsonify({'ok': False, 'message': '用户不存在'}), 404
+
+    db.set_password(uid, generate_password_hash(password))
+    print(f"[用户] {me['username']} 重置了 {row['username']} 的密码")
+    return jsonify({'ok': True, 'message': f"已重置 {row['username']} 的密码"})
+
+
+@app.route('/admin/users/update', methods=['POST'])
+def admin_users_update():
+    me = _require_admin()
+    if not _csrf_ok():
+        return jsonify({'ok': False, 'message': '页面已过期，请刷新后重试'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = int(data.get('id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'message': '用户 ID 非法'}), 400
+
+    row = db.get_user_by_id(uid)
+    if not row:
+        return jsonify({'ok': False, 'message': '用户不存在'}), 404
+
+    role = row['role']
+    if 'role' in data:
+        role = 'admin' if data.get('role') == 'admin' else 'user'
+    active = bool(data.get('active', row.get('active', 1)))
+
+    # 保护：不能把自己降级/禁用，也不能把最后一个管理员干掉
+    if uid == me['id'] and (role != 'admin' or not active):
+        return jsonify({'ok': False, 'message': '不能禁用或降级当前登录的管理员'}), 400
+    if row['role'] == 'admin' and (role != 'admin' or not active) and db.count_admins() <= 1:
+        return jsonify({'ok': False, 'message': '至少要保留一个启用的管理员'}), 400
+
+    db.set_role(uid, role)
+    db.set_active(uid, active)
+    print(f"[用户] {me['username']} 更新了 {row['username']}：role={role} active={active}")
+    return jsonify({'ok': True, 'message': '已保存'})
+
+
+@app.route('/admin/users/delete', methods=['POST'])
+def admin_users_delete():
+    me = _require_admin()
+    if not _csrf_ok():
+        return jsonify({'ok': False, 'message': '页面已过期，请刷新后重试'}), 400
+
+    data = request.get_json(silent=True) or {}
+    try:
+        uid = int(data.get('id'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'message': '用户 ID 非法'}), 400
+    if uid == me['id']:
+        return jsonify({'ok': False, 'message': '不能删除当前登录的账号'}), 400
+
+    row = db.get_user_by_id(uid)
+    if not row:
+        return jsonify({'ok': False, 'message': '用户不存在'}), 404
+    if row['role'] == 'admin' and db.count_admins() <= 1:
+        return jsonify({'ok': False, 'message': '至少要保留一个启用的管理员'}), 400
+
+    db.delete_user(uid)
+    print(f"[用户] {me['username']} 删除了 {row['username']}")
+    return jsonify({'ok': True, 'message': f"已删除 {row['username']}"})
+
 
 # --- Socket.IO 事件绑定 ---
 @socketio.on('connect')

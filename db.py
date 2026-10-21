@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
     password_hash TEXT NOT NULL,
     role          TEXT NOT NULL DEFAULT 'user',
+    active        INTEGER NOT NULL DEFAULT 1,
     created_at    REAL NOT NULL,
     last_login_at REAL
 );
@@ -47,6 +48,11 @@ def init(path):
     with closing(_connect()) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(SCHEMA)
+        # 老库补列：users.active（禁用账号）
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
         conn.commit()
     return _db_path
 
@@ -95,8 +101,18 @@ def get_user_by_id(user_id):
 
 def list_users():
     return _all(
-        "SELECT id, username, role, created_at, last_login_at FROM users ORDER BY id"
+        "SELECT id, username, role, active, created_at, last_login_at FROM users ORDER BY id"
     )
+
+
+def set_active(user_id, active):
+    """启用 / 禁用账号"""
+    return _write("UPDATE users SET active = ? WHERE id = ?", (1 if active else 0, user_id))
+
+
+def count_admins():
+    row = _one("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1")
+    return row['n'] if row else 0
 
 
 def create_user(username, password_hash, role='user'):
