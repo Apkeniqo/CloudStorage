@@ -139,6 +139,11 @@ def write_file(path, content):
     os.replace(tmp, full)
 
 
+def _normalize(data):
+    """换行差异不算变化：仓库里存 LF，Windows 工作区常是 CRLF"""
+    return data.replace(b'\r\n', b'\n')
+
+
 def changed_files(files):
     """只保留内容与本地不同的文件"""
     diff = []
@@ -147,7 +152,7 @@ def changed_files(files):
         if os.path.isfile(full):
             try:
                 with open(full, 'rb') as f:
-                    if f.read() == content:
+                    if _normalize(f.read()) == _normalize(content):
                         continue
             except OSError:
                 pass
