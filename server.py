@@ -521,16 +521,17 @@ def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk
                 with open(chunk_path, 'rb') as f:
                     # 合并的同时计算 SHA-256，避免合并完再完整读一遍大文件
                     while True:
-                        block = f.read(2 * 1024 * 1024)
+                        block = f.read(8 * 1024 * 1024)
                         if not block:
                             break
                         hasher.update(block)
                         target_file.write(block)
-                # 每个切片落盘后再更新进度，断电也不容易留下半个文件
-                target_file.flush()
-                os.fsync(target_file.fileno())
                 merge_tasks[file_hash]['progress'] = int(((i + 1) / total_chunks) * 100)
                 merge_tasks[file_hash]['updated_at'] = time.time()
+
+            # 只在全部写完时落一次盘：每个切片都 fsync 会让大文件合并慢一个数量级
+            target_file.flush()
+            os.fsync(target_file.fileno())
 
         # 合并完整无误后，原子重命名
         os.replace(tmp_target_path, target_path)
@@ -839,11 +840,25 @@ def check_chunks():
 @app.route('/upload/chunk', methods=['POST'])
 def upload_chunk():
     try:
-        file = request.files.get('chunk')
-        file_hash = request.form.get('fileHash')
-        chunk_index = request.form.get('chunkIndex')
+        # 两种上传方式：
+        #   raw       —— 请求体就是切片本身，元数据放 X-File-Hash / X-Chunk-Index 头
+        #                （省掉 multipart 解析和一次临时文件落盘，大文件快很多）
+        #   multipart —— 旧前端用的 form-data，保留兼容
+        raw_mode = (request.headers.get('X-Upload-Mode') or '').lower() == 'raw'
 
-        if not file or not file_hash or chunk_index is None:
+        if raw_mode:
+            file_hash = request.headers.get('X-File-Hash')
+            chunk_index = request.headers.get('X-Chunk-Index')
+            source = request.stream
+            if request.content_length is None:
+                return jsonify({'status': 'error', 'message': '缺少 Content-Length'}), 411
+        else:
+            file = request.files.get('chunk')
+            file_hash = request.form.get('fileHash')
+            chunk_index = request.form.get('chunkIndex')
+            source = file.stream if file else None
+
+        if not source or not file_hash or chunk_index is None:
             return jsonify({'status': 'error', 'message': '参数不完整'}), 400
         # 关键校验：hash 与序号都必须干净，否则会把文件写到临时目录之外
         if not is_safe_hash(file_hash):
@@ -860,15 +875,24 @@ def upload_chunk():
         if chunk_path is None:
             return jsonify({'status': 'error', 'message': '路径非法'}), 400
 
-        # 从 file.stream 流式落盘，写完 fsync 保证切片完整
-        with open(chunk_path, 'wb') as f:
-            shutil.copyfileobj(file.stream, f, length=2*1024*1024)
-            f.flush()
-            os.fsync(f.fileno())
+        # 先写 .part 再原子改名：断点续传时绝不会把写了一半的切片当成“已完成”
+        part_path = chunk_path + '.part'
+        try:
+            with open(part_path, 'wb') as f:
+                shutil.copyfileobj(source, f, length=4 * 1024 * 1024)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(part_path, chunk_path)
+        except Exception:
+            try:
+                os.remove(part_path)
+            except OSError:
+                pass
+            raise
 
         return jsonify({'status': 'success'})
     except Exception as e:
-        print(f"[切片保存失败] Index: {request.form.get('chunkIndex')}, Error:")
+        print(f"[切片保存失败] Index: {request.headers.get('X-Chunk-Index') or request.form.get('chunkIndex')}, Error:")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': '切片保存失败'}), 500
     

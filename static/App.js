@@ -1,8 +1,15 @@
 const socket = io();
 const uploadTasks = new Map();
-const MAX_CHUNKS = 64;
-const MIN_CHUNK_SIZE = 5 * 1024 * 1024; // 最小 5MB 切片大小
-const MAX_CONCURRENT_UPLOADS = 1; // 最大并发切片上传数 
+
+// 分片策略：目标 128 片，单片 8MB–64MB。
+// 片太小网络往返开销占比高，片太大单请求失败重传代价高。
+const TARGET_CHUNK_COUNT = 128;
+const MIN_CHUNK_SIZE = 8 * 1024 * 1024;
+const MAX_CHUNK_SIZE = 64 * 1024 * 1024;
+
+// 并发切片数：4 条连接在千兆局域网下基本能吃满带宽；
+// 太大反而会让服务端线程和磁盘排队，4 是稳妥值。
+const MAX_CONCURRENT_UPLOADS = 4;
 
 // 核心状态管理
 let rawFilesData = [];
@@ -495,11 +502,9 @@ async function uploadLargeFileChunks(file, taskId) {
         file: file
     });
 
-    // 动态计算切片大小（保证分片数 <= 64）
-    const MAX_CHUNKS = 64;
-    const MIN_CHUNK_SIZE = 10 * 1024 * 1024; // 10MB 最小切片
-    const calculatedChunkSize = Math.ceil(file.size / MAX_CHUNKS);
-    const chunkSize = Math.max(MIN_CHUNK_SIZE, calculatedChunkSize);
+    // 动态计算切片大小：目标 128 片，限制在 8MB–64MB 之间
+    const calculatedChunkSize = Math.ceil(file.size / TARGET_CHUNK_COUNT);
+    const chunkSize = Math.min(MAX_CHUNK_SIZE, Math.max(MIN_CHUNK_SIZE, calculatedChunkSize));
     const totalChunks = Math.ceil(file.size / chunkSize);
 
     if (speedText) speedText.textContent = "检查已接收切片...";
@@ -559,7 +564,7 @@ async function uploadLargeFileChunks(file, taskId) {
     updateProgress(taskId, initialUploadedBytes, file.size);
 
     if (pendingChunks.length > 0) {
-        if (speedText) speedText.textContent = `分块传输中 (${pendingChunks.length}/${totalChunks} 切片)...`;
+        if (speedText) speedText.textContent = `分块传输中 (${pendingChunks.length}/${totalChunks} 片，${MAX_CONCURRENT_UPLOADS} 并发)...`;
     } else {
         if (speedText) speedText.textContent = "秒传完成，正在合并...";
     }
@@ -580,11 +585,6 @@ async function uploadLargeFileChunks(file, taskId) {
                 const start = chunkIndex * chunkSize;
                 const end = Math.min(file.size, start + chunkSize);
                 const chunk = file.slice(start, end);
-
-                const formData = new FormData();
-                formData.append('chunk', chunk);
-                formData.append('fileHash', fileHash);
-                formData.append('chunkIndex', chunkIndex);
 
                 const xhr = new XMLHttpRequest();
                 task.activeXHRs.add(xhr);
@@ -620,7 +620,8 @@ async function uploadLargeFileChunks(file, taskId) {
                         resolve();
                     } else if (retryCount < maxRetries) {
                         retryCount++;
-                        setTimeout(doUpload, 1000);
+                        // 指数退避：1s → 2s → 4s，避免服务端抖动时被连续重试打满
+                        setTimeout(doUpload, Math.min(1000 * Math.pow(2, retryCount - 1), 8000));
                     } else {
                         reject(new Error(`Chunk error: ${xhr.status}`));
                     }
@@ -630,14 +631,19 @@ async function uploadLargeFileChunks(file, taskId) {
                     task.activeXHRs.delete(xhr);
                     if (retryCount < maxRetries) {
                         retryCount++;
-                        setTimeout(doUpload, 1000);
+                        setTimeout(doUpload, Math.min(1000 * Math.pow(2, retryCount - 1), 8000));
                     } else {
                         reject(new Error('Network error'));
                     }
                 };
 
+                // 裸二进制上传：请求体就是切片本身，服务端少一次临时文件落盘
                 xhr.open('POST', '/upload/chunk', true);
-                xhr.send(formData);
+                xhr.setRequestHeader('X-Upload-Mode', 'raw');
+                xhr.setRequestHeader('X-File-Hash', fileHash);
+                xhr.setRequestHeader('X-Chunk-Index', String(chunkIndex));
+                xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+                xhr.send(chunk);
             };
 
             doUpload();
