@@ -14,8 +14,39 @@
 
 ## 快速开始
 
+## 从零开始（克隆后直接装服务）
+
 ```powershell
-# 需要 Python 3.13
+git clone https://github.com/Apkeniqo/CloudStorage.git D:\Projects\CloudStorage
+cd D:\Projects\CloudStorage
+
+# 需要 Python 3.9 或更高（推荐 3.11 / 3.12 / 3.13，安装脚本会自动挑选可用版本）
+
+# 一条命令：生成 config.ini、建虚拟环境、装依赖、注册并启动服务
+.\install_service.cmd
+```
+
+`install_service.cmd` 会自动用 `-ExecutionPolicy Bypass` 调起 PowerShell，避免「无法加载文件，因为在此系统上禁止运行脚本」的报错；执行过程中会提示你设置 admin 初始密码。
+
+非交互安装（远程 / 批处理）可以显式传密码：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install_service.ps1 -AdminPassword '你的密码'
+```
+
+不想装服务、只想先跑起来看看：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install_service.ps1 -PrepareOnly
+.\.venv\Scripts\python.exe service.py --foreground
+```
+
+`config.ini` 不在仓库里（含密码和会话密钥），首次运行时会从 `config.example.ini` 自动生成。
+
+## 手动部署
+
+```powershell
+# 需要 Python 3.9+（下面以 3.13 为例；任何 3.9 以上版本都可以）
 py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
@@ -25,6 +56,10 @@ Copy-Item config.example.ini config.ini
 # 前台运行（调试用）
 .\.venv\Scripts\python.exe server.py
 ```
+
+> 程序启动时会检查 Python 版本，低于 3.9 直接报错退出。安装脚本则会在
+> `py -3.13 / -3.12 / -3.11 / -3.10 / -3.9 / -3` 以及 PATH 里的 `python`、`python3` 中
+> 自动挑选第一个可用的版本。
 
 首次启动会自动建库、建管理员账号，并把会话密钥写回 `config.ini`。
 
@@ -37,21 +72,23 @@ Copy-Item config.example.ini config.ini
 项目必须放在**本机磁盘**上（Windows 服务不能从网络共享启动）。
 
 ```powershell
-# 必须在「以管理员身份运行」的 PowerShell 里执行
-cd D:\Projects\CloudStorage
+# 方式一：双击或命令行运行（自动绕过执行策略）
+.\install_service.cmd
+
+# 方式二：在「以管理员身份运行」的 PowerShell 里
 powershell -ExecutionPolicy Bypass -File .\install_service.ps1
 ```
 
-脚本会：重建或复用 `.venv` → 安装依赖 → 注册 `CloudStorage` 服务 → 设置崩溃重启（5s/10s/30s）→ 开机延迟自启 → 放行防火墙 5000/TCP（仅域/专用网络）。
+脚本会：生成 `config.ini`（若缺失）→ 提示设置 admin 密码 → 重建或复用 `.venv` → 安装依赖 → 注册 `CloudStorage` 服务 → 设置崩溃重启（5s/10s/30s）→ 开机延迟自启 → 放行防火墙 5000/TCP（仅域/专用网络）。
 
 常用命令：
 
 ```powershell
 Get-Service CloudStorage
 Restart-Service CloudStorage
-python service.py --foreground        # 前台运行，便于看日志
-python service.py stop / start        # 手动控制
-powershell -ExecutionPolicy Bypass -File .\uninstall_service.ps1
+.\.venv\Scripts\python.exe service.py --foreground   # 前台运行，便于看日志
+.\.venv\Scripts\python.exe service.py stop / start   # 手动控制
+.\uninstall_service.cmd
 ```
 
 日志：`logs\cloudstorage.log`（5MB × 5 轮转）。

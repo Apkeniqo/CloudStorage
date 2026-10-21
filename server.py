@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import shutil
 import secrets
@@ -18,6 +19,13 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
 import db
+
+MIN_PYTHON = (3, 9)
+if sys.version_info < MIN_PYTHON:
+    raise SystemExit(
+        "需要 Python %d.%d 或更高版本，当前是 %s。请升级 Python 后重试。"
+        % (MIN_PYTHON[0], MIN_PYTHON[1], sys.version.split()[0])
+    )
 
 app = Flask(__name__)
 
@@ -1117,6 +1125,7 @@ def create_http_server():
 
 def print_runtime_summary():
     print("服务配置加载完成:")
+    print(f" - PYTHON: {sys.version.split()[0]}")
     print(f" - HOST: {HOST}")
     print(f" - PORT: {PORT}")
     print(f" - UPLOAD_DIR: {app.config['UPLOAD_FOLDER']}")
