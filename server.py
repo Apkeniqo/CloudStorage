@@ -729,7 +729,7 @@ def current_user():
 def require_login():
     if not AUTH_ENABLED:
         return None
-    if request.endpoint in ('login', 'static', 'auth_me'):
+    if request.endpoint in ('login', 'static', 'auth_me', 'share_download'):
         return None
     if current_user():
         return None
@@ -1294,6 +1294,105 @@ def download(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
+# ---------------------------------------------------------------- 分享链接
+SHARE_TOKEN_RE = re.compile(r'^[A-Za-z0-9_-]{8,64}$')
+
+
+def _share_valid(row):
+    """返回 (是否有效, 原因)"""
+    if not row:
+        return False, 'not_found'
+    if row.get('expires_at') and row['expires_at'] < time.time():
+        return False, 'expired'
+    if row.get('max_downloads') and row['downloads'] >= row['max_downloads']:
+        return False, 'used_up'
+    return True, ''
+
+
+@app.route('/s/<token>')
+def share_download(token):
+    if not SHARE_TOKEN_RE.match(token or ''):
+        abort(404)
+    row = db.get_share(token)
+    ok, reason = _share_valid(row)
+    if not ok:
+        abort(410 if reason != 'not_found' else 404)
+
+    path = safe_join(app.config['UPLOAD_FOLDER'], row['file_name'])
+    if path is None or not os.path.isfile(path):
+        abort(404)
+
+    db.touch_share(token)
+    return send_from_directory(app.config['UPLOAD_FOLDER'], row['file_name'], as_attachment=True)
+
+
+@app.route('/api/shares', methods=['GET', 'POST'])
+def api_shares():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    if request.method == 'GET':
+        name = clean_filename(request.args.get('name'))
+        rows = db.list_shares(name) if name else db.list_shares()
+        now = time.time()
+        items = []
+        for r in rows:
+            ok, reason = _share_valid(r)
+            items.append({
+                'token': r['token'],
+                'name': r['file_name'],
+                'url': f'/s/{r["token"]}',
+                'created_at': r['created_at'],
+                'expires_at': r['expires_at'],
+                'max_downloads': r['max_downloads'],
+                'downloads': r['downloads'],
+                'active': ok,
+                'reason': reason,
+            })
+        return jsonify({'items': items})
+
+    data = request.get_json(silent=True) or {}
+    name = clean_filename(data.get('name'))
+    if not name:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+
+    path = safe_join(app.config['UPLOAD_FOLDER'], name)
+    if path is None or not os.path.isfile(path):
+        return jsonify({'status': 'error', 'message': '文件不存在'}), 404
+
+    try:
+        hours = float(data.get('expire_hours') or 0)
+    except (TypeError, ValueError):
+        hours = 0
+    try:
+        max_downloads = int(data.get('max_downloads') or 0)
+    except (TypeError, ValueError):
+        max_downloads = 0
+    max_downloads = max(0, min(max_downloads, 100000))
+
+    expires_at = time.time() + hours * 3600 if hours > 0 else None
+    token = secrets.token_urlsafe(16)
+    db.create_share(token, name, user['username'], expires_at, max_downloads)
+    print(f"[分享] {user['username']} 分享了 {name}（{hours or '永久'} 小时 / {max_downloads or '不限'} 次）")
+    return jsonify({'status': 'success', 'url': f'/s/{token}', 'token': token})
+
+
+@app.route('/api/shares/revoke', methods=['POST'])
+def api_share_revoke():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    token = (request.get_json(silent=True) or {}).get('token') or ''
+    if not SHARE_TOKEN_RE.match(token):
+        return jsonify({'status': 'error', 'message': '链接非法'}), 400
+    db.delete_share(token)
+    print(f"[分享] {user['username']} 取消了一个分享链接")
+    return jsonify({'status': 'success'})
+
+
+
 # 删除文件：移动到回收站（可从后台恢复）
 @app.route('/files/delete', methods=['POST'])
 def delete_file():
@@ -1320,6 +1419,12 @@ def delete_file():
         db.mark_deleted(name)
     except Exception as e:
         print(f"[数据库] 标记删除失败: {e}")
+
+    # 文件都没了，指向它的分享链接一并作废
+    try:
+        db.delete_shares_for(name)
+    except Exception as e:
+        print(f"[数据库] 清理分享链接失败: {e}")
 
     print(f"[删除] {name} -> {os.path.basename(trashed)}（操作人 {user['username']}）")
     with app.app_context():

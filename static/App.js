@@ -52,6 +52,12 @@ function initApp() {
             if (ren) {
                 e.preventDefault();
                 renameFile(ren.dataset.name);
+                return;
+            }
+            const share = target.closest('.share-btn');
+            if (share) {
+                e.preventDefault();
+                shareFile(share.dataset.name);
             }
         });
     }
@@ -329,12 +335,35 @@ function renderFileList() {
                     <a href="${downloadUrl}" download="${file.name}" class="download-btn" title="下载">
                         ${downloadIconSvg}
                     </a>
+                    <button class="share-btn" data-name="${safeName}" title="分享">⇱</button>
                     <button class="rename-btn" data-name="${safeName}" title="重命名">✎</button>
                     <button class="delete-btn" data-name="${safeName}" title="删除">✕</button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// 生成分享链接
+async function shareFile(name) {
+    if (!name) return;
+    const hours = prompt(`生成「${name}」的分享链接\n有效期（小时，0 = 永久）：`, '24');
+    if (hours === null) return;
+    const maxDownloads = prompt('可下载次数（0 = 不限）：', '0');
+    if (maxDownloads === null) return;
+
+    try {
+        const res = await fetch('/api/shares', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, expire_hours: hours, max_downloads: maxDownloads })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { alert(data.message || `生成失败（${res.status}）`); return; }
+        prompt('分享链接已生成（复制后发送给对方）：', location.origin + data.url);
+    } catch (e) {
+        alert('生成失败：' + e);
+    }
 }
 
 // 重命名文件

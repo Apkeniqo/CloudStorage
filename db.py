@@ -33,6 +33,19 @@ CREATE TABLE IF NOT EXISTS files (
 
 CREATE INDEX IF NOT EXISTS idx_files_name    ON files(name);
 CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at);
+
+CREATE TABLE IF NOT EXISTS shares (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    token         TEXT NOT NULL UNIQUE,
+    file_name     TEXT NOT NULL,
+    created_by    TEXT,
+    created_at    REAL NOT NULL,
+    expires_at    REAL,
+    max_downloads INTEGER NOT NULL DEFAULT 0,
+    downloads     INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_shares_file ON shares(file_name);
 """
 
 _db_path = None
@@ -195,3 +208,36 @@ def stats():
     )
     row['users'] = count_users()
     return row
+
+
+# ---------------------------------------------------------------- 分享链接
+
+def create_share(token, file_name, created_by, expires_at=None, max_downloads=0):
+    return _write(
+        "INSERT INTO shares (token, file_name, created_by, created_at, expires_at, max_downloads)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (token, file_name, created_by, time.time(), expires_at, int(max_downloads or 0)),
+    )
+
+
+def get_share(token):
+    return _one("SELECT * FROM shares WHERE token = ?", (token,))
+
+
+def list_shares(file_name=None):
+    if file_name:
+        return _all("SELECT * FROM shares WHERE file_name = ? ORDER BY id DESC", (file_name,))
+    return _all("SELECT * FROM shares ORDER BY id DESC LIMIT 500")
+
+
+def touch_share(token):
+    return _write("UPDATE shares SET downloads = downloads + 1 WHERE token = ?", (token,))
+
+
+def delete_share(token):
+    return _write("DELETE FROM shares WHERE token = ?", (token,))
+
+
+def delete_shares_for(file_name):
+    return _write("DELETE FROM shares WHERE file_name = ?", (file_name,))
+

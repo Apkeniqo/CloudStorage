@@ -431,6 +431,24 @@ body {
 }
 
 /* Action Rename Button */
+.share-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    vertical-align: middle;
+    margin-left: 2px;
+}
+
+.share-btn:hover {
+    background: var(--hover-bg);
+    color: var(--accent-color);
+}
+
 .rename-btn {
     background: transparent;
     border: none;
