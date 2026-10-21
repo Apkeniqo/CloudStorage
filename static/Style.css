@@ -158,6 +158,18 @@ body {
     max-width: 100%;
 }
 
+/* 桌面端：视图切换/主题/后台/回收站/退出 都排在工具栏里 */
+.toolbar-extra {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* 这些按钮的文字标签只在移动端二级菜单里显示 */
+.btn-label { display: none; }
+
+.mobile-more { display: none; }
+
 /* Fluent Search Box */
 .search-box {
     position: relative;
@@ -408,91 +420,53 @@ body {
     transition: opacity 0.2s;
 }
 
-.view-grid .file-action a,
-.view-grid .file-action button {
-    padding: 3px 5px;
-    font-size: 12px;
+.view-grid .file-action {
+    gap: 0;
 }
 
-.view-grid .file-item:hover .file-action {
-    opacity: 1;
+.view-grid .action-btn {
+    width: 26px;
+    height: 26px;
 }
 
-/* Action Download Button */
-.download-btn {
-    background: transparent;
-    border: none;
-    color: var(--accent-color);
-    padding: 6px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    display: inline-flex;
-    justify-content: center;
+/* 文件操作按钮：四个按钮统一尺寸与位置，和下载按钮完全一致 */
+.file-action {
+    display: flex;
     align-items: center;
-    text-decoration: none;
-}
-
-.download-btn:hover {
-    background: var(--hover-bg);
-}
-
-/* 列表操作列：四个按钮排成一行，不换行（否则行高被撑高、看起来像变形） */
-.view-list .file-action {
+    justify-content: flex-end;
+    gap: 2px;
     white-space: nowrap;
-    text-align: right;
 }
 
-/* Action Rename Button */
-.share-btn {
-    background: transparent;
+.file-action .action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    margin: 0;
     border: none;
-    color: var(--text-secondary);
-    padding: 6px 8px;
     border-radius: var(--radius);
-    cursor: pointer;
+    background: transparent;
+    color: var(--text-secondary);
     font-size: 13px;
     line-height: 1;
-    vertical-align: middle;
-    margin-left: 2px;
+    cursor: pointer;
+    text-decoration: none;
+    flex: 0 0 auto;
 }
 
-.share-btn:hover {
+.file-action .action-btn:hover {
     background: var(--hover-bg);
     color: var(--accent-color);
 }
 
-.rename-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    padding: 6px 8px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    vertical-align: middle;
-}
-
-.rename-btn:hover {
-    background: var(--hover-bg);
+.file-action .download-btn {
     color: var(--accent-color);
 }
 
-/* Action Delete Button */
-.delete-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    padding: 6px 8px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-    margin-left: 2px;
-    vertical-align: middle;
-}
-
-.delete-btn:hover {
+.file-action .delete-btn:hover {
     background: rgba(209, 52, 56, 0.12);
     color: #d13438;
 }
@@ -725,23 +699,67 @@ body {
         gap: 8px;
     }
 
-    .title {
-        font-size: 15px;
+    /* 移动端顶部只保留搜索框、上传按钮和「更多」入口 */
+    .header .title {
+        display: none;
     }
 
-    /* 工具栏换行：搜索框单独一行，其余按钮排在下面 */
     .toolbar {
         width: 100%;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         justify-content: flex-end;
         gap: 6px;
+        position: relative;
     }
 
     .search-box {
-        flex: 1 1 100%;
-        order: -1;
-        width: 100% !important;
+        flex: 1 1 auto;
+        order: 0;
+        width: auto !important;
         min-width: 0;
+    }
+
+    .mobile-more {
+        display: inline-flex;
+    }
+
+    /* 视图/主题/后台/回收站/退出 收进二级菜单 */
+    .toolbar-extra {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 60;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        min-width: 172px;
+        padding: 6px;
+        background: var(--card-bg);
+        backdrop-filter: blur(24px) saturate(180%);
+        -webkit-backdrop-filter: blur(24px) saturate(180%);
+        border: 1px solid var(--card-border);
+        border-radius: calc(var(--radius) * 1.2);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    }
+
+    .toolbar-extra.open {
+        display: flex;
+    }
+
+    .toolbar-extra .btn-icon {
+        width: 100%;
+        height: 44px;
+        min-width: 0;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: 0 12px;
+    }
+
+    .toolbar-extra .btn-label {
+        display: inline;
+        font-size: 14px;
+        font-weight: 400;
     }
 
     /* 触摸目标不小于 40px */
