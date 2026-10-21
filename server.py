@@ -729,7 +729,7 @@ def current_user():
 def require_login():
     if not AUTH_ENABLED:
         return None
-    if request.endpoint in ('login', 'static', 'auth_me', 'share_download'):
+    if request.endpoint in ('login', 'static', 'auth_me', 'share_download', 'healthz', 'api_version'):
         return None
     if current_user():
         return None
@@ -1287,6 +1287,54 @@ def upload_file():
         print(f"上传出错: {e}")
         traceback.print_exc()
         return jsonify({'status': 'error', 'message': '上传失败'}), 500
+
+# ---------------------------------------------------------------- 健康检查
+@app.route('/healthz')
+def healthz():
+    """供监控/网关探活，不需要登录。任何一项失败返回 503。"""
+    checks = {}
+    ok = True
+
+    try:
+        stats = db.stats()
+        checks['db'] = f"ok ({stats['files']} files, {stats['users']} users)"
+    except Exception as e:
+        ok = False
+        checks['db'] = f'error: {e}'
+
+    try:
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        probe = os.path.join(TEMP_DIR, '.health_probe')
+        with open(probe, 'w', encoding='utf-8') as f:
+            f.write('ok')
+        os.remove(probe)
+        checks['storage'] = 'ok'
+    except OSError as e:
+        ok = False
+        checks['storage'] = f'error: {e}'
+
+    if not os.path.isdir(app.config['UPLOAD_FOLDER']):
+        ok = False
+        checks['upload_dir'] = 'missing'
+    else:
+        checks['upload_dir'] = 'ok'
+
+    return jsonify({
+        'ok': ok,
+        'version': version.VERSION,
+        'uptime': int(time.time() - START_TIME),
+        'checks': checks,
+    }), (200 if ok else 503)
+
+
+@app.route('/api/version')
+def api_version():
+    return jsonify({
+        'version': version.VERSION,
+        'python': sys.version.split()[0],
+        'uptime': int(time.time() - START_TIME),
+    })
+
 
 # 文件下载路由
 @app.route('/download/<path:filename>')
