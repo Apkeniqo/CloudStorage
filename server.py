@@ -1076,6 +1076,48 @@ def delete_file():
     return jsonify({'status': 'success', 'message': '已移到回收站', 'trash': os.path.basename(trashed)})
 
 
+# 重命名文件
+@app.route('/files/rename', methods=['POST'])
+def rename_file():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    old = clean_filename(data.get('name'))
+    new = clean_filename(data.get('newName'))
+    if not old or not new:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+    if old == new:
+        return jsonify({'status': 'success', 'name': new})
+
+    src = safe_join(app.config['UPLOAD_FOLDER'], old)
+    if src is None or not os.path.isfile(src):
+        return jsonify({'status': 'error', 'message': '文件不存在'}), 404
+
+    dst = safe_join(app.config['UPLOAD_FOLDER'], new)
+    if dst is None:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+    if os.path.exists(dst):
+        return jsonify({'status': 'error', 'message': '同名文件已存在'}), 409
+
+    try:
+        os.rename(src, dst)
+    except OSError as e:
+        print(f"[重命名] 失败: {e}")
+        return jsonify({'status': 'error', 'message': '重命名失败'}), 500
+
+    try:
+        db.rename_file(old, new)
+    except Exception as e:
+        print(f"[数据库] 同步重命名失败: {e}")
+
+    print(f"[重命名] {old} -> {new}（操作人 {user['username']}）")
+    with app.app_context():
+        socketio.emit('file_update', get_file_list())
+    return jsonify({'status': 'success', 'name': new})
+
+
 # ---------------------------------------------------------------- 回收站
 TRASH_NAME_RE = re.compile(r'^\d{8}-\d{6}_(.+)$')
 

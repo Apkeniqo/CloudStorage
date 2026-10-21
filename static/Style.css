@@ -430,6 +430,24 @@ body {
     background: var(--hover-bg);
 }
 
+/* Action Rename Button */
+.rename-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.rename-btn:hover {
+    background: var(--hover-bg);
+    color: var(--accent-color);
+}
+
 /* Action Delete Button */
 .delete-btn {
     background: transparent;

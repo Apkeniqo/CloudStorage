@@ -40,10 +40,19 @@ function initApp() {
     // 删除按钮用事件委托：文件名可能带引号，直接拼 onclick 会坏
     if (itemsWrapper) {
         itemsWrapper.addEventListener('click', (e) => {
-            const btn = e.target.closest && e.target.closest('.delete-btn');
-            if (!btn) return;
-            e.preventDefault();
-            deleteFile(btn.dataset.name);
+            const target = e.target;
+            if (!target || !target.closest) return;
+            const del = target.closest('.delete-btn');
+            if (del) {
+                e.preventDefault();
+                deleteFile(del.dataset.name);
+                return;
+            }
+            const ren = target.closest('.rename-btn');
+            if (ren) {
+                e.preventDefault();
+                renameFile(ren.dataset.name);
+            }
         });
     }
 
@@ -320,11 +329,33 @@ function renderFileList() {
                     <a href="${downloadUrl}" download="${file.name}" class="download-btn" title="下载">
                         ${downloadIconSvg}
                     </a>
+                    <button class="rename-btn" data-name="${safeName}" title="重命名">✎</button>
                     <button class="delete-btn" data-name="${safeName}" title="删除">✕</button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// 重命名文件
+async function renameFile(name) {
+    if (!name) return;
+    const input = prompt(`把「${name}」重命名为：`, name);
+    if (input === null) return;
+    const newName = input.trim();
+    if (!newName || newName === name) return;
+
+    try {
+        const res = await fetch('/files/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, newName })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) alert(data.message || `重命名失败（${res.status}）`);
+    } catch (e) {
+        alert('重命名失败：' + e);
+    }
 }
 
 // 删除文件（移到回收站）

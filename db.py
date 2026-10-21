@@ -156,6 +156,14 @@ def restore_record(name):
     )
 
 
+def rename_file(old_name, new_name):
+    """文件改名后同步记录"""
+    return _write(
+        "UPDATE files SET name = ? WHERE name = ? AND deleted_at IS NULL",
+        (new_name, old_name),
+    )
+
+
 def files_by_user(user_id, limit=200):
     return _all(
         "SELECT * FROM files WHERE uploader_id = ? AND deleted_at IS NULL"

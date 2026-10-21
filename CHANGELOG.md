@@ -16,3 +16,9 @@
 - 新增 `GET /api/trash`、`POST /trash/restore`、`/trash/purge`、`/trash/empty`
 - 恢复时自动改名避免与现有文件冲突，并复原数据库记录
 - 首页工具栏新增回收站入口
+## beta 2026.1022.3 — 重命名
+
+- 新增 `POST /files/rename`：改名后同步数据库记录
+- 目标名已存在时返回 409，不会覆盖
+- 文件名统一走 `clean_filename` 清洗，../evil.txt 会被收敛成 evil.txt，不会越出存储目录
+- 文件列表每行新增重命名按钮（铅笔图标），用事件委托绑定
