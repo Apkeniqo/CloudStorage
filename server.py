@@ -1076,6 +1076,128 @@ def delete_file():
     return jsonify({'status': 'success', 'message': '已移到回收站', 'trash': os.path.basename(trashed)})
 
 
+# ---------------------------------------------------------------- 回收站
+TRASH_NAME_RE = re.compile(r'^\d{8}-\d{6}_(.+)$')
+
+
+def trash_original_name(name):
+    """从回收站文件名还原原始文件名：20261022-120000_xxx.txt -> xxx.txt"""
+    m = TRASH_NAME_RE.match(name)
+    return m.group(1) if m else name
+
+
+def _trash_entries():
+    items = []
+    if not os.path.isdir(TRASH_DIR):
+        return items
+    for entry in os.scandir(TRASH_DIR):
+        try:
+            if not entry.is_file():
+                continue
+            st = entry.stat()
+        except OSError:
+            continue
+        items.append({
+            'trash': entry.name,
+            'name': trash_original_name(entry.name),
+            'size': st.st_size,
+            'mtime': st.st_mtime,
+        })
+    items.sort(key=lambda x: x['mtime'], reverse=True)
+    return items
+
+
+@app.route('/trash')
+def trash_page():
+    user = current_user()
+    if not user:
+        return redirect(url_for('login', next='/trash'))
+    return render_template('trash.html', user=user)
+
+
+@app.route('/api/trash')
+def api_trash():
+    if not current_user():
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+    return jsonify({'items': _trash_entries()})
+
+
+@app.route('/trash/restore', methods=['POST'])
+def trash_restore():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    name = clean_filename((request.get_json(silent=True) or {}).get('trash'))
+    if not name:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+
+    src = safe_join(TRASH_DIR, name)
+    if src is None or not os.path.isfile(src):
+        return jsonify({'status': 'error', 'message': '回收站里没有这个文件'}), 404
+
+    target = unique_path(UPLOAD_FOLDER, trash_original_name(name))
+    try:
+        shutil.move(src, target)
+    except OSError as e:
+        print(f"[回收站] 恢复失败: {e}")
+        return jsonify({'status': 'error', 'message': '恢复失败'}), 500
+
+    try:
+        db.restore_record(os.path.basename(target))
+    except Exception as e:
+        print(f"[数据库] 恢复记录失败: {e}")
+
+    print(f"[回收站] 恢复 {name} -> {os.path.basename(target)}（操作人 {user['username']}）")
+    with app.app_context():
+        socketio.emit('file_update', get_file_list())
+    return jsonify({'status': 'success', 'name': os.path.basename(target)})
+
+
+@app.route('/trash/purge', methods=['POST'])
+def trash_purge():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    name = clean_filename((request.get_json(silent=True) or {}).get('trash'))
+    if not name:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+
+    path = safe_join(TRASH_DIR, name)
+    if path is None or not os.path.isfile(path):
+        return jsonify({'status': 'error', 'message': '回收站里没有这个文件'}), 404
+    try:
+        os.remove(path)
+    except OSError as e:
+        print(f"[回收站] 彻底删除失败: {e}")
+        return jsonify({'status': 'error', 'message': '删除失败'}), 500
+
+    print(f"[回收站] 彻底删除 {name}（操作人 {user['username']}）")
+    return jsonify({'status': 'success'})
+
+
+@app.route('/trash/empty', methods=['POST'])
+def trash_empty():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    removed, failed = 0, 0
+    for item in _trash_entries():
+        path = safe_join(TRASH_DIR, item['trash'])
+        if path is None:
+            continue
+        try:
+            os.remove(path)
+            removed += 1
+        except OSError:
+            failed += 1
+
+    print(f"[回收站] 清空：删除 {removed} 个，失败 {failed} 个（操作人 {user['username']}）")
+    return jsonify({'status': 'success', 'removed': removed, 'failed': failed})
+
+
 # ---------------------------------------------------------------- 命令行工具
 def cli_list_users():
     rows = db.list_users()
