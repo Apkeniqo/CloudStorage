@@ -228,3 +228,56 @@ static/                 App.js / Style.css
 - 数据库存的是 scrypt 哈希，不是明文密码
 - 部署到公网前建议加一层 HTTPS 反向代理（80/443 被封时可用 8443 等端口）
 - 服务默认以 LocalSystem 运行，注意项目目录与 `config.ini` 的文件权限
+
+## 自检
+
+`powershell
+.\selfcheck.cmd                 # 双击也行
+python selfcheck.py --offline   # 只检查本机环境
+python selfcheck.py --url http://192.168.1.10:5000
+`
+
+依次检查：Python 版本、依赖、`config.ini`、存储/临时/回收站目录可写、数据库、鉴权开关，以及运行中服务的 `/healthz`、`/api/version`、`/login`，最后汇总失败项并返回退出码（0 通过 / 1 有失败）。
+
+## 接口一览
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/` | 文件列表页 |
+| GET/POST | `/login``/logout` | 登录 / 退出 |
+| GET | `/auth/me` | 当前会话信息 |
+| GET | `/healthz` | 健康检查（免登录，异常 503） |
+| GET | `/api/version` | 版本与运行时长（免登录） |
+| POST | `/upload` | 小文件单流上传（JSON 或表单） |
+| GET | `/upload/check?fileHash=` | 断点续传：已完成的切片号 |
+| POST | `/upload/chunk` | 切片上传（裸二进制 + `X-File-Hash`/`X-Chunk-Index`/`X-Chunk-Crc32`，兼容 multipart） |
+| POST | `/upload/merge` | 合并切片（JSON：fileHash / fileName / totalChunks） |
+| GET | `/upload/merge_status?fileHash=` | 合并进度 |
+| GET | `/download/<name>` | 下载 |
+| POST | `/files/delete` | 删除到回收站（JSON：name） |
+| POST | `/files/rename` | 重命名（JSON：name / newName） |
+| GET | `/trash``/api/trash` | 回收站页面 / 列表 |
+| POST | `/trash/restore``/trash/purge``/trash/empty` | 恢复 / 彻底删除 / 清空 |
+| GET/POST | `/api/shares` | 分享链接列表 / 创建（name, expire_hours, max_downloads） |
+| POST | `/api/shares/revoke` | 撤销分享 |
+| GET | `/s/<token>` | 免登录下载分享文件 |
+| GET | `/admin``/admin/users``/admin/events` | 管理后台 / 用户 / 审计 |
+| POST | `/admin/config``/admin/password``/admin/users/*` | 保存配置 / 改密 / 用户操作 |
+
+## 常见问题
+
+**服务起不来**：先看 `logs\cloudstorage.log`，再看事件查看器的 `Service Control Manager`；端口被占用会直接报错（已禁用 Windows 的端口复用）。
+
+**忘记管理员密码**：
+
+`powershell
+python server.py --set-password admin
+`
+
+**外网访问不了**：80/443 被运营商封锁，用 5000/8080/8443 之类端口，并在路由器上做端口映射。
+
+**局域网访问不了**：确认防火墙放行了该 TCP 端口（安装脚本只对「域/专用」网络放行），并且 `host` 是 `::` 或 `0.0.0.0`。
+
+**上传很慢**：确认浏览器加载的是新前端（Ctrl+F5），切片并发为 4；服务端磁盘是瓶颈时也会变慢。
+
+**磁盘被占满**：调小 `[LIMIT] max_storage_mb`，或清理 `Trash/` 与 `uploads_temp/`。

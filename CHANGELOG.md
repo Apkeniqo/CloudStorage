@@ -90,3 +90,9 @@
 - 413 提示改为「请求体超过上限（N MB）」；404 统一「页面或接口不存在」；405 提示「请求方法不允许」
 - `/api/*` 加入受保护前缀：未登录直接 401 JSON，不再被 302 重定向成 HTML
 - 修复：`/upload`、`/upload/chunk` 里的 `except Exception` 把 413 吞成了 500，改为先 `except HTTPException: raise`
+## beta 2026.1022.15 — 自检脚本与文档收尾
+
+- 新增 `selfcheck.py` / `selfcheck.cmd`：检查 Python 版本、依赖、配置文件、目录可写、数据库、鉴权开关，以及运行中服务的 `/healthz`、`/api/version`、`/login`
+- `--offline` 只看本地环境，`--url` 可指向远端实例；失败项汇总后以退出码 1 返回
+- README 补充接口一览、自检用法与常见问题；CHANGELOG 汇总到 15 个版本
+- 自检实测：对着运行中的实例 15 项全部通过
