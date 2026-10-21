@@ -80,7 +80,10 @@ class Api:
                     'GitHub 拒绝访问（%d）。私有仓库需要在 config.ini 的 [UPDATE] token 填入访问令牌。'
                     % e.code)
             if e.code == 404:
-                raise SystemExit('远端路径不存在（404）：%s（检查 [UPDATE] repo / branch）' % path)
+                raise SystemExit(
+                    '远端路径不存在（404）：%s\n'
+                    '注意：私有仓库不带令牌时 GitHub 同样返回 404，'
+                    '请检查 config.ini 的 [UPDATE] repo / branch / token。' % path)
             raise SystemExit('请求失败 %d：%s' % (e.code, path))
         if raw:
             return data
