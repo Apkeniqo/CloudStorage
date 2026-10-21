@@ -160,6 +160,8 @@ SETTING_SPECS = [
 
     {'group': '认证', 'key': 'enabled', 'section': 'AUTH', 'type': 'bool', 'restart': True,
      'label': '启用登录', 'help': '关闭后所有人可直接访问；改动需重启'},
+    {'group': '认证', 'key': 'isolate_files', 'section': 'AUTH', 'type': 'bool', 'restart': False,
+     'label': '文件隔离', 'help': '开启后普通用户只能看到并操作自己上传的文件，管理员不受影响'},
     {'group': '认证', 'key': 'admin_user', 'section': 'AUTH', 'type': 'str', 'restart': True,
      'label': '管理员用户名', 'help': '仅在数据库里还没有任何用户时用于创建首个管理员'},
 
@@ -263,6 +265,7 @@ def hot_apply(keys):
     """把不需要重启的配置立刻应用到内存"""
     global MAX_CONTENT_LENGTH_MB, MAX_CONTENT_LENGTH, CHUNK_EXPIRE_SECONDS, CLEANUP_INTERVAL_SECONDS
     global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL, MAX_STORAGE_MB
+    global ISOLATE_FILES
 
     if 'max_content_length_mb' in keys:
         MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb',
@@ -271,6 +274,8 @@ def hot_apply(keys):
         app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
     if 'max_storage_mb' in keys:
         MAX_STORAGE_MB = config.getint('LIMIT', 'max_storage_mb', fallback=MAX_STORAGE_MB)
+    if 'isolate_files' in keys:
+        ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=ISOLATE_FILES)
     if 'chunk_expire_seconds' in keys:
         CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds',
                                              fallback=CHUNK_EXPIRE_SECONDS)
@@ -339,6 +344,9 @@ def config_groups():
 AUTH_ENABLED = config.getboolean('AUTH', 'enabled', fallback=True)
 ADMIN_USER = (config.get('AUTH', 'admin_user', fallback='admin') or '').strip() or 'admin'
 ADMIN_PASSWORD = (config.get('AUTH', 'admin_password', fallback='') or '').strip()
+
+# 文件隔离：开启后普通用户只能看到/操作自己上传的文件，管理员不受影响
+ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=False)
 
 # 会话密钥：没有就生成一个并写回配置，重启服务后已登录用户不掉线
 SESSION_SECRET = (config.get('AUTH', 'secret', fallback='') or '').strip()
@@ -536,7 +544,25 @@ def get_file_list():
 
     except Exception as e:
         print(f"读取文件错误: {e}")
+
+    user = current_user()
+    if ISOLATE_FILES and user and user.get('role') != 'admin':
+        uid = user.get('id')
+        file_list = [f for f in file_list
+                     if (records.get(f['name']) or {}).get('uploader_id') == uid]
+
     return sorted(file_list, key=lambda x: x['mtime'], reverse=True)
+
+
+def can_manage_file(name, user=None):
+    """当前用户是否有权操作这个文件。隔离关闭或管理员时始终允许。"""
+    user = user or current_user()
+    if not user:
+        return False
+    if not ISOLATE_FILES or user.get('role') == 'admin':
+        return True
+    rec = db.latest_record(name, include_deleted=False)
+    return bool(rec and rec.get('uploader_id') == user.get('id'))
 
 
 def storage_usage():
@@ -924,6 +950,7 @@ def admin_page():
         'uptime': int(time.time() - START_TIME),
         'storage_used': storage_usage(),
         'storage_limit': MAX_STORAGE_MB,
+        'isolate_files': ISOLATE_FILES,
         'files': stats.get('files', 0),
         'bytes': stats.get('bytes', 0),
         'users': stats.get('users', 0),
@@ -1463,6 +1490,9 @@ def api_shares():
     if not name:
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
 
+    if not can_manage_file(name, user):
+        return jsonify({'status': 'error', 'message': '无权分享该文件'}), 403
+
     path = safe_join(app.config['UPLOAD_FOLDER'], name)
     if path is None or not os.path.isfile(path):
         return jsonify({'status': 'error', 'message': '文件不存在'}), 404
@@ -1513,6 +1543,9 @@ def delete_file():
     if not name:
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
 
+    if not can_manage_file(name, user):
+        return jsonify({'status': 'error', 'message': '无权操作该文件'}), 403
+
     src = safe_join(app.config['UPLOAD_FOLDER'], name)
     if src is None or not os.path.isfile(src):
         return jsonify({'status': 'error', 'message': '文件不存在'}), 404
@@ -1555,6 +1588,9 @@ def rename_file():
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
     if old == new:
         return jsonify({'status': 'success', 'name': new})
+
+    if not can_manage_file(old, user):
+        return jsonify({'status': 'error', 'message': '无权操作该文件'}), 403
 
     src = safe_join(app.config['UPLOAD_FOLDER'], old)
     if src is None or not os.path.isfile(src):
@@ -1611,6 +1647,12 @@ def _trash_entries():
             'size': st.st_size,
             'mtime': st.st_mtime,
         })
+    user = current_user()
+    if ISOLATE_FILES and user and user.get('role') != 'admin':
+        uid = user.get('id')
+        items = [i for i in items
+                 if (db.latest_record(i['name']) or {}).get('uploader_id') == uid]
+
     items.sort(key=lambda x: x['mtime'], reverse=True)
     return items
 

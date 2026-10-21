@@ -181,6 +181,16 @@ def latest_file_records():
     return {row['name']: row for row in rows}
 
 
+def latest_record(name, include_deleted=True):
+    """某个文件名的最新一条记录（默认含已删除的，回收站也要用它判断归属）"""
+    if include_deleted:
+        return _one("SELECT * FROM files WHERE name = ? ORDER BY id DESC LIMIT 1", (name,))
+    return _one(
+        "SELECT * FROM files WHERE name = ? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+        (name,),
+    )
+
+
 def mark_deleted(name, when=None):
     """把某个文件的所有活跃记录标记为已删除"""
     return _write(
