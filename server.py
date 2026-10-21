@@ -148,6 +148,9 @@ SETTING_SPECS = [
     {'group': '限制', 'key': 'max_content_length_mb', 'section': 'LIMIT', 'type': 'int',
      'restart': False, 'label': '单次请求上限 (MB)', 'min': 1, 'max': 1048576,
      'help': '保存后立即生效，只影响之后的请求'},
+    {'group': '限制', 'key': 'max_storage_mb', 'section': 'LIMIT', 'type': 'int',
+     'restart': False, 'label': '存储总量上限 (MB)', 'min': 0, 'max': 10485760,
+     'help': '0 表示不限制；超过后上传与合成都返回 413'},
 
     {'group': '清理', 'key': 'chunk_expire_seconds', 'section': 'CLEANUP', 'type': 'int',
      'restart': False, 'label': '未完成切片过期时间 (秒)', 'min': 60, 'max': 2592000},
@@ -258,13 +261,15 @@ def update_config_values(pairs):
 def hot_apply(keys):
     """把不需要重启的配置立刻应用到内存"""
     global MAX_CONTENT_LENGTH_MB, MAX_CONTENT_LENGTH, CHUNK_EXPIRE_SECONDS, CLEANUP_INTERVAL_SECONDS
-    global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL
+    global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL, MAX_STORAGE_MB
 
     if 'max_content_length_mb' in keys:
         MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb',
                                               fallback=MAX_CONTENT_LENGTH_MB)
         MAX_CONTENT_LENGTH = MAX_CONTENT_LENGTH_MB * 1024 * 1024
         app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+    if 'max_storage_mb' in keys:
+        MAX_STORAGE_MB = config.getint('LIMIT', 'max_storage_mb', fallback=MAX_STORAGE_MB)
     if 'chunk_expire_seconds' in keys:
         CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds',
                                              fallback=CHUNK_EXPIRE_SECONDS)
@@ -362,6 +367,9 @@ TRASH_DIR = resolve_path(config.get('PATH', 'trash_dir', fallback='Trash'), 'Tra
 # 解析 LIMIT 与 CLEANUP 配置
 MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb', fallback=500)
 MAX_CONTENT_LENGTH = MAX_CONTENT_LENGTH_MB * 1024 * 1024
+
+# 存储总量上限（MB，0 = 不限制）
+MAX_STORAGE_MB = config.getint('LIMIT', 'max_storage_mb', fallback=0)
 
 CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds', fallback=3600)
 CLEANUP_INTERVAL_SECONDS = config.getint('CLEANUP', 'cleanup_interval_seconds', fallback=300)
@@ -528,6 +536,38 @@ def get_file_list():
     except Exception as e:
         print(f"读取文件错误: {e}")
     return sorted(file_list, key=lambda x: x['mtime'], reverse=True)
+
+
+def storage_usage():
+    """存储目录当前占用（字节）"""
+    total = 0
+    try:
+        with os.scandir(app.config['UPLOAD_FOLDER']) as it:
+            for entry in it:
+                try:
+                    if entry.is_file():
+                        total += entry.stat().st_size
+                except OSError:
+                    continue
+    except OSError:
+        pass
+    return total
+
+
+def quota_error(extra_bytes):
+    """超出存储上限时返回 {'message': ...}，否则 None。max_storage_mb=0 表示不限制。"""
+    if MAX_STORAGE_MB <= 0:
+        return None
+    limit = MAX_STORAGE_MB * 1024 * 1024
+    used = storage_usage()
+    if used + max(0, extra_bytes) > limit:
+        return {
+            'used': used,
+            'limit': limit,
+            'message': f"存储空间不足：已用 {used / 1048576:.1f} MB / 上限 {MAX_STORAGE_MB} MB",
+        }
+    return None
+
 
 def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk_dir,
                         uploader_id=None, uploader_name=None):
@@ -845,8 +885,7 @@ def admin_page():
 
     info = {
         'version': version.VERSION,
-        'host': HOST,
-        'port': PORT,
+        'host': HOST,        'port': PORT,
         'upload_folder': UPLOAD_FOLDER,
         'temp_dir': TEMP_DIR,
         'db_path': DB_PATH,
@@ -854,6 +893,8 @@ def admin_page():
         'config_path': config_file,
         'log_path': os.path.join(BASE_DIR, 'logs', 'cloudstorage.log'),
         'uptime': int(time.time() - START_TIME),
+        'storage_used': storage_usage(),
+        'storage_limit': MAX_STORAGE_MB,
         'files': stats.get('files', 0),
         'bytes': stats.get('bytes', 0),
         'users': stats.get('users', 0),
@@ -1172,6 +1213,17 @@ def merge_chunks():
         if merge_tasks.get(file_hash, {}).get('status') == 'processing':
             return jsonify({'status': 'error', 'message': '该文件正在合并中，请稍候'}), 409
 
+        # 合并前检查存储配额（切片大小之和就是最终文件大小）
+        total_size = 0
+        for i in range(total_chunks):
+            try:
+                total_size += os.path.getsize(os.path.join(chunk_dir, str(i)))
+            except OSError:
+                pass
+        quota = quota_error(total_size)
+        if quota:
+            return jsonify({'status': 'error', 'message': quota['message']}), 413
+
         # 开启后台线程独立合并（带上上传者，成功后写入文件记录）
         user = current_user() or {}
         t = threading.Thread(
@@ -1204,6 +1256,11 @@ def upload_file():
         file = request.files['file']
         if file.filename == '':
             return jsonify({'status': 'error', 'message': '未选择文件'}), 400
+
+        # 用 Content-Length 作为上界，超配额直接拒绝（比写完再回滚省事）
+        quota = quota_error(request.content_length or 0)
+        if quota:
+            return jsonify({'status': 'error', 'message': quota['message']}), 413
 
         if file:
             raw_filename = clean_filename(file.filename) or f"file_{int(time.time())}"

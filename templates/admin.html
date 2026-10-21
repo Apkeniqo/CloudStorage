@@ -281,6 +281,7 @@
             <div class="info-row"><span>版本</span><code>{{ info.version }}</code></div>
             <div class="info-row"><span>监听</span><code>{{ info.host }}:{{ info.port }}</code></div>
             <div class="info-row"><span>已运行</span><code>{{ info.uptime }} 秒</code></div>
+            <div class="info-row"><span>存储占用</span><code>{{ '%.1f'|format(info.storage_used / 1048576) }} MB{% if info.storage_limit > 0 %} / 上限 {{ info.storage_limit }} MB{% else %} / 不限制{% endif %}</code></div>
             <div class="info-row"><span>存储目录</span><code>{{ info.upload_folder }}</code></div>
             <div class="info-row"><span>临时目录</span><code>{{ info.temp_dir }}</code></div>
             <div class="info-row"><span>数据库</span><code>{{ info.db_path }}</code></div>
