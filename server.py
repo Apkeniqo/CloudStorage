@@ -357,6 +357,7 @@ def resolve_path(raw_path, default_relative):
 # 解析 PATH 配置
 UPLOAD_FOLDER = resolve_path(config.get('PATH', 'upload_folder', fallback='CloudStorage/Files'), 'CloudStorage/Files')
 TEMP_DIR = resolve_path(config.get('PATH', 'temp_dir', fallback='uploads_temp'), 'uploads_temp')
+TRASH_DIR = resolve_path(config.get('PATH', 'trash_dir', fallback='Trash'), 'Trash')
 
 # 解析 LIMIT 与 CLEANUP 配置
 MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb', fallback=500)
@@ -414,6 +415,15 @@ def file_sha256(path):
             h.update(block)
     return h.hexdigest()
 
+def move_to_trash(src_path, name):
+    """把文件移进回收站，返回回收站里的路径（带时间前缀，避免重名）"""
+    os.makedirs(TRASH_DIR, exist_ok=True)
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    target = unique_path(TRASH_DIR, f'{stamp}_{name}')
+    shutil.move(src_path, target)
+    return target
+
+
 def unique_path(directory, filename):
     """同名文件不覆盖，自动追加 (1)、(2)…"""
     stem, ext = os.path.splitext(filename)
@@ -438,6 +448,7 @@ def ensure_dir(path, label, fallback_relative):
 # 确保必要的目录存在：存储目录与临时目录都取自 config.ini，不可用时自动降级
 TEMP_DIR = ensure_dir(TEMP_DIR, '临时目录', ('uploads_temp',))
 UPLOAD_FOLDER = ensure_dir(UPLOAD_FOLDER, '存储目录', ('CloudStorage', 'Files'))
+TRASH_DIR = ensure_dir(TRASH_DIR, '回收站', ('Trash',))
 
 # ---- 数据库 ----
 DB_PATH = resolve_path(config.get('DB', 'path', fallback='CloudStorage/cloudstorage.db'),
@@ -1030,6 +1041,40 @@ def upload_file():
 @app.route('/download/<path:filename>')
 def download(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
+
+# 删除文件：移动到回收站（可从后台恢复）
+@app.route('/files/delete', methods=['POST'])
+def delete_file():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    name = clean_filename(data.get('name'))
+    if not name:
+        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+
+    src = safe_join(app.config['UPLOAD_FOLDER'], name)
+    if src is None or not os.path.isfile(src):
+        return jsonify({'status': 'error', 'message': '文件不存在'}), 404
+
+    try:
+        trashed = move_to_trash(src, name)
+    except OSError as e:
+        print(f"[删除] 移动到回收站失败: {e}")
+        return jsonify({'status': 'error', 'message': '删除失败'}), 500
+
+    try:
+        db.mark_deleted(name)
+    except Exception as e:
+        print(f"[数据库] 标记删除失败: {e}")
+
+    print(f"[删除] {name} -> {os.path.basename(trashed)}（操作人 {user['username']}）")
+    with app.app_context():
+        socketio.emit('file_update', get_file_list())
+    return jsonify({'status': 'success', 'message': '已移到回收站', 'trash': os.path.basename(trashed)})
+
 
 # ---------------------------------------------------------------- 命令行工具
 def cli_list_users():

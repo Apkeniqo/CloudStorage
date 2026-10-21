@@ -430,6 +430,25 @@ body {
     background: var(--hover-bg);
 }
 
+/* Action Delete Button */
+.delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    margin-left: 2px;
+    vertical-align: middle;
+}
+
+.delete-btn:hover {
+    background: rgba(209, 52, 56, 0.12);
+    color: #d13438;
+}
+
 /* 文件名超链接样式 */
 .file-name-link {
     color: var(--text-main);

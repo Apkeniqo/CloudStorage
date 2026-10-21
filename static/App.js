@@ -37,6 +37,16 @@ function initApp() {
     initTheme();
     setViewMode(currentView, false);
 
+    // 删除按钮用事件委托：文件名可能带引号，直接拼 onclick 会坏
+    if (itemsWrapper) {
+        itemsWrapper.addEventListener('click', (e) => {
+            const btn = e.target.closest && e.target.closest('.delete-btn');
+            if (!btn) return;
+            e.preventDefault();
+            deleteFile(btn.dataset.name);
+        });
+    }
+
     // 取当前登录用户，用于状态栏显示
     fetch('/auth/me', { cache: 'no-store' })
         .then(r => r.json())
@@ -310,10 +320,30 @@ function renderFileList() {
                     <a href="${downloadUrl}" download="${file.name}" class="download-btn" title="下载">
                         ${downloadIconSvg}
                     </a>
+                    <button class="delete-btn" data-name="${safeName}" title="删除">✕</button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// 删除文件（移到回收站）
+async function deleteFile(name) {
+    if (!name) return;
+    if (!confirm(`确定删除「${name}」？\n文件会移到回收站，之后可以恢复。`)) return;
+    try {
+        const res = await fetch('/files/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || `删除失败（${res.status}）`);
+        }
+    } catch (e) {
+        alert('删除失败：' + e);
+    }
 }
 
 // ---- 文件指纹 ----

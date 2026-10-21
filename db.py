@@ -140,6 +140,22 @@ def latest_file_records():
     return {row['name']: row for row in rows}
 
 
+def mark_deleted(name, when=None):
+    """把某个文件的所有活跃记录标记为已删除"""
+    return _write(
+        "UPDATE files SET deleted_at = ? WHERE name = ? AND deleted_at IS NULL",
+        (when or time.time(), name),
+    )
+
+
+def restore_record(name):
+    """恢复被标记删除的记录（还原文件时用）"""
+    return _write(
+        "UPDATE files SET deleted_at = NULL WHERE name = ? AND deleted_at IS NOT NULL",
+        (name,),
+    )
+
+
 def files_by_user(user_id, limit=200):
     return _all(
         "SELECT * FROM files WHERE uploader_id = ? AND deleted_at IS NULL"
