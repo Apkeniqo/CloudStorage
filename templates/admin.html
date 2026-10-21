@@ -235,8 +235,7 @@
             .pw-grid { grid-template-columns: 1fr; }
         }
 
-        .user-list { display: flex; flex-direction: column; }
-        .user-row {
+        .user-list { display: flex; flex-direction: column; }        .user-row {
             display: grid;
             grid-template-columns: 1fr auto;
             gap: 4px 12px;
@@ -259,6 +258,23 @@
         }
         .u-ops button:hover { background: var(--hover-bg); }
         .u-ops button.danger { color: #d13438; border-color: rgba(209, 52, 56, .35); }
+
+        .event-list { display: flex; flex-direction: column; font-size: 12.5px; }
+        .event-row {
+            display: grid;
+            grid-template-columns: 140px 100px 110px 1fr 1fr;
+            gap: 8px;
+            padding: 7px 0;
+            border-bottom: 1px dashed var(--card-border);
+        }
+        .event-row:last-child { border-bottom: none; }
+        .e-time, .e-actor, .e-detail { color: var(--text-secondary); }
+        .e-action { font-weight: 600; }
+        .e-target { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        @media (max-width: 720px) {
+            .event-row { grid-template-columns: 1fr 1fr; }
+            .e-detail { grid-column: 1 / -1; }
+        }
     </style>
 </head>
 <body>
@@ -289,6 +305,12 @@
             <div class="info-row"><span>文件 / 用户</span><code>{{ info.files }} 个 / {{ info.users }} 人</code></div>
             <div class="info-row"><span>日志</span><code>{{ info.log_path }}</code></div>
         </div>
+    </div>
+
+    <div class="card">
+        <h2>最近事件</h2>
+        <p class="sub">登录、上传、删除、改名、分享、用户与配置变更（最近 100 条）</p>
+        <div id="event-list" class="event-list">加载中...</div>
     </div>
 
     <div class="card">
@@ -463,6 +485,36 @@
         return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    function fmtDateTime(ts) {
+        if (!ts) return '-';
+        const d = new Date(ts * 1000);
+        return d.toLocaleString([], {
+            month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+    }
+
+    async function loadEvents() {
+        const box = document.getElementById('event-list');
+        try {
+            const res = await fetch('/admin/events?limit=100', { cache: 'no-store' });
+            if (!res.ok) { box.textContent = '加载失败'; return; }
+            const data = await res.json();
+            const items = data.events || [];
+            if (!items.length) { box.innerHTML = '<div class="empty">还没有事件</div>'; return; }
+            box.innerHTML = items.map(e => `
+                <div class="event-row">
+                    <span class="e-time">${fmtDateTime(e.ts)}</span>
+                    <span class="e-actor">${escapeHtml(e.actor || '-')}</span>
+                    <span class="e-action">${escapeHtml(e.action)}</span>
+                    <span class="e-target" title="${escapeHtml(e.target || '')}">${escapeHtml(e.target || '')}</span>
+                    <span class="e-detail">${escapeHtml(e.detail || '')}</span>
+                </div>`).join('');
+        } catch (e) {
+            box.textContent = '加载失败：' + e;
+        }
+    }
+
     async function loadUsers() {
         const box = document.getElementById('user-list');
         try {
@@ -530,6 +582,7 @@
 
     // 跟随主界面的主题
     loadUsers();
+    loadEvents();
     (function () {
         var saved = localStorage.getItem('fluent_theme') || 'system';
         var dark = saved === 'dark' ||

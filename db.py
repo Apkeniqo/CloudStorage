@@ -46,6 +46,18 @@ CREATE TABLE IF NOT EXISTS shares (
 );
 
 CREATE INDEX IF NOT EXISTS idx_shares_file ON shares(file_name);
+
+CREATE TABLE IF NOT EXISTS events (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts     REAL NOT NULL,
+    actor  TEXT,
+    action TEXT NOT NULL,
+    target TEXT,
+    detail TEXT,
+    ip     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 """
 
 _db_path = None
@@ -240,4 +252,26 @@ def delete_share(token):
 
 def delete_shares_for(file_name):
     return _write("DELETE FROM shares WHERE file_name = ?", (file_name,))
+
+
+# ---------------------------------------------------------------- 审计日志
+
+def add_event(action, actor='', target='', detail='', ip=''):
+    return _write(
+        "INSERT INTO events (ts, actor, action, target, detail, ip) VALUES (?, ?, ?, ?, ?, ?)",
+        (time.time(), actor, action, target, detail, ip),
+    )
+
+
+def list_events(limit=100):
+    return _all("SELECT * FROM events ORDER BY id DESC LIMIT ?", (int(limit),))
+
+
+def prune_events(keep=5000):
+    """只保留最近 N 条审计记录，避免库无限增长"""
+    return _write(
+        "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT ?)",
+        (int(keep),),
+    )
+
 

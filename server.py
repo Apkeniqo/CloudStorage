@@ -631,6 +631,12 @@ def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk
         except Exception as e:
             print(f"[数据库] 写入文件记录失败（合并结果不受影响）: {e}")
 
+        try:
+            db.add_event('upload', uploader_name or 'anonymous', final_name,
+                         f'{os.path.getsize(target_path)} bytes (chunked)')
+        except Exception:
+            pass
+
         merge_tasks[file_hash] = {
             'status': 'success', 'progress': 100,
             'name': final_name, 'sha256': digest, 'updated_at': time.time()
@@ -820,6 +826,7 @@ def login():
             session['role'] = user['role']
             session.permanent = True
             db.touch_login(user['id'])
+            audit('login', user['username'])
             target = request.values.get('next') or '/'
             # 只允许跳回站内路径，避免开放重定向
             if not target.startswith('/') or target.startswith('//'):
@@ -827,6 +834,7 @@ def login():
             return redirect(target)
         else:
             login_record_fail(key)
+            audit('login_failed', username or '-')
             # 不区分「用户不存在」和「密码错误」，避免账号枚举
             error = '用户名或密码不正确'
 
@@ -869,6 +877,26 @@ def _csrf_token():
 def _csrf_ok():
     token = session.get('csrf')
     return bool(token) and request.headers.get('X-CSRF-Token') == token
+
+
+def audit(action, target='', detail=''):
+    """记一条审计事件；失败不影响主流程"""
+    try:
+        user = current_user()
+        actor = user['username'] if user else 'anonymous'
+        db.add_event(action, actor, target, detail, request.remote_addr or '')
+    except Exception as e:
+        print(f"[审计] 记录失败: {e}")
+
+
+@app.route('/admin/events')
+def admin_events():
+    _require_admin()
+    try:
+        limit = max(1, min(int(request.args.get('limit', 100)), 500))
+    except (TypeError, ValueError):
+        limit = 100
+    return jsonify({'events': db.list_events(limit)})
 
 
 @app.route('/admin')
@@ -915,6 +943,8 @@ def admin_save_config():
         return jsonify({'ok': False, 'message': '有配置项未通过校验', 'errors': errors}), 400
     if not applied:
         return jsonify({'ok': True, 'message': '没有改动', 'restart': []})
+
+    audit('config', '', ','.join(applied))
 
     message = f'已保存 {len(applied)} 项'
     if restart:
@@ -984,6 +1014,7 @@ def admin_users_create():
         return jsonify({'ok': False, 'message': '用户名已存在'}), 409
 
     db.create_user(username, generate_password_hash(password), role)
+    audit('user_create', username, role)
     print(f"[用户] {me['username']} 创建了 {username}（{role}）")
     return jsonify({'ok': True, 'message': f'已创建 {username}'})
 
@@ -1008,6 +1039,7 @@ def admin_users_password():
         return jsonify({'ok': False, 'message': '用户不存在'}), 404
 
     db.set_password(uid, generate_password_hash(password))
+    audit('user_password', row['username'])
     print(f"[用户] {me['username']} 重置了 {row['username']} 的密码")
     return jsonify({'ok': True, 'message': f"已重置 {row['username']} 的密码"})
 
@@ -1041,6 +1073,7 @@ def admin_users_update():
 
     db.set_role(uid, role)
     db.set_active(uid, active)
+    audit('user_update', row['username'], f'role={role} active={active}')
     print(f"[用户] {me['username']} 更新了 {row['username']}：role={role} active={active}")
     return jsonify({'ok': True, 'message': '已保存'})
 
@@ -1066,6 +1099,7 @@ def admin_users_delete():
         return jsonify({'ok': False, 'message': '至少要保留一个启用的管理员'}), 400
 
     db.delete_user(uid)
+    audit('user_delete', row['username'])
     print(f"[用户] {me['username']} 删除了 {row['username']}")
     return jsonify({'ok': True, 'message': f"已删除 {row['username']}"})
 
@@ -1281,6 +1315,7 @@ def upload_file():
 
             with app.app_context():
                 socketio.emit('file_update', get_file_list())
+            audit('upload', os.path.basename(file_path), f'{os.path.getsize(file_path)} bytes')
             return jsonify({'status': 'success', 'message': '文件上传成功',
                             'name': os.path.basename(file_path)})
     except Exception as e:
@@ -1422,6 +1457,7 @@ def api_shares():
     expires_at = time.time() + hours * 3600 if hours > 0 else None
     token = secrets.token_urlsafe(16)
     db.create_share(token, name, user['username'], expires_at, max_downloads)
+    audit('share', name)
     print(f"[分享] {user['username']} 分享了 {name}（{hours or '永久'} 小时 / {max_downloads or '不限'} 次）")
     return jsonify({'status': 'success', 'url': f'/s/{token}', 'token': token})
 
@@ -1436,6 +1472,7 @@ def api_share_revoke():
     if not SHARE_TOKEN_RE.match(token):
         return jsonify({'status': 'error', 'message': '链接非法'}), 400
     db.delete_share(token)
+    audit('share_revoke', token)
     print(f"[分享] {user['username']} 取消了一个分享链接")
     return jsonify({'status': 'success'})
 
@@ -1474,6 +1511,7 @@ def delete_file():
     except Exception as e:
         print(f"[数据库] 清理分享链接失败: {e}")
 
+    audit('delete', name)
     print(f"[删除] {name} -> {os.path.basename(trashed)}（操作人 {user['username']}）")
     with app.app_context():
         socketio.emit('file_update', get_file_list())
@@ -1516,6 +1554,7 @@ def rename_file():
     except Exception as e:
         print(f"[数据库] 同步重命名失败: {e}")
 
+    audit('rename', old, f'-> {new}')
     print(f"[重命名] {old} -> {new}（操作人 {user['username']}）")
     with app.app_context():
         socketio.emit('file_update', get_file_list())
@@ -1594,6 +1633,7 @@ def trash_restore():
     except Exception as e:
         print(f"[数据库] 恢复记录失败: {e}")
 
+    audit('restore', os.path.basename(target))
     print(f"[回收站] 恢复 {name} -> {os.path.basename(target)}（操作人 {user['username']}）")
     with app.app_context():
         socketio.emit('file_update', get_file_list())
@@ -1619,6 +1659,7 @@ def trash_purge():
         print(f"[回收站] 彻底删除失败: {e}")
         return jsonify({'status': 'error', 'message': '删除失败'}), 500
 
+    audit('purge', name)
     print(f"[回收站] 彻底删除 {name}（操作人 {user['username']}）")
     return jsonify({'status': 'success'})
 
@@ -1640,6 +1681,7 @@ def trash_empty():
         except OSError:
             failed += 1
 
+    audit('trash_empty', '', f'removed={removed} failed={failed}')
     print(f"[回收站] 清空：删除 {removed} 个，失败 {failed} 个（操作人 {user['username']}）")
     return jsonify({'status': 'success', 'removed': removed, 'failed': failed})
 
@@ -1800,6 +1842,12 @@ def start_background_workers():
     cleanup_thread = threading.Thread(target=auto_cleanup_stale_chunks, daemon=True)
     cleanup_thread.start()
     print("[启动] 切片自动清理已开启")
+
+    # 审计表只保留最近 5000 条
+    try:
+        db.prune_events(5000)
+    except Exception as e:
+        print(f"[审计] 清理历史事件失败: {e}")
 
     start_log_maintenance()
 
