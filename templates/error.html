@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ code }} - CloudStorage</title>
+    <link rel="stylesheet" href="/static/Style.css">
+    <style>
+        .err-card {
+            max-width: 380px;
+            width: 100%;
+            background: var(--card-bg);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid var(--card-border);
+            border-radius: calc(var(--radius) * 1.5);
+            box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
+            padding: 32px 28px;
+            text-align: center;
+        }
+
+        .err-code {
+            font-size: 44px;
+            font-weight: 700;
+            color: var(--accent-color);
+            line-height: 1;
+            margin-bottom: 10px;
+        }
+
+        .err-msg {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 22px;
+        }
+
+        .err-card a {
+            display: inline-block;
+            padding: 9px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent-color);
+            border-radius: var(--radius);
+            text-decoration: none;
+        }
+
+        .err-card a:hover { background: var(--accent-hover); }
+    </style>
+</head>
+<body>
+    <div class="err-card">
+        <div class="err-code">{{ code }}</div>
+        <div class="err-msg">{{ message }}</div>
+        <a href="/">返回文件列表</a>
+    </div>
+    <script>
+        (function () {
+            var saved = localStorage.getItem('fluent_theme') || 'system';
+            var dark = saved === 'dark' ||
+                (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+        })();
+    </script>
+</body>
+</html>

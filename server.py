@@ -17,6 +17,7 @@ from flask import (Flask, render_template, request, jsonify, send_from_directory
                    session, redirect, url_for, abort)
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.exceptions import HTTPException
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -743,7 +744,7 @@ def auto_cleanup_stale_chunks():
 
 # --- 访问鉴权 ---
 # 页面请求未登录时跳转登录页；接口/Socket.IO 请求直接 401，避免前端拿到一段 HTML
-PROTECTED_PREFIXES = ('/upload', '/download', '/socket.io')
+PROTECTED_PREFIXES = ('/upload', '/download', '/socket.io', '/api/')
 
 def current_user():
     """返回当前会话对应的用户；用户被删除或被禁用时返回 None"""
@@ -769,6 +770,42 @@ def require_login():
     if request.path.startswith(PROTECTED_PREFIXES):
         return jsonify({'status': 'error', 'message': '未登录或登录已过期'}), 401
     return redirect(url_for('login', next=request.path))
+
+
+# ---------------------------------------------------------------- 统一错误处理
+def _wants_json_error():
+    if request.path.startswith(('/api/', '/upload', '/files/', '/admin/', '/trash/')):
+        return True
+    if request.is_json:
+        return True
+    best = request.accept_mimetypes.best
+    if best == 'application/json':
+        return request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+    return False
+
+
+@app.errorhandler(HTTPException)
+def handle_http_error(err):
+    message = err.description or err.name
+    if err.code == 404:
+        message = '页面或接口不存在'
+    elif err.code == 413:
+        message = f'请求体超过上限（{MAX_CONTENT_LENGTH_MB} MB）'
+    elif err.code == 405:
+        message = '请求方法不允许'
+
+    if _wants_json_error():
+        return jsonify({'status': 'error', 'code': err.code, 'message': message}), err.code
+    return render_template('error.html', code=err.code, message=message), err.code
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(err):
+    print(f"[未处理异常] {err}")
+    traceback.print_exc()
+    if _wants_json_error():
+        return jsonify({'status': 'error', 'code': 500, 'message': '服务器内部错误'}), 500
+    return render_template('error.html', code=500, message='服务器内部错误'), 500
 
 # ---- 登录失败限流（内存计数，重启清零）----
 LOGIN_MAX_FAILS = 5
@@ -1253,6 +1290,8 @@ def upload_chunk():
             raise
 
         return jsonify({'status': 'success'})
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[切片保存失败] Index: {request.headers.get('X-Chunk-Index') or request.form.get('chunkIndex')}, Error:")
         traceback.print_exc()
@@ -1368,6 +1407,8 @@ def upload_file():
             audit('upload', os.path.basename(file_path), f'{os.path.getsize(file_path)} bytes')
             return jsonify({'status': 'success', 'message': '文件上传成功',
                             'name': os.path.basename(file_path)})
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"上传出错: {e}")
         traceback.print_exc()
