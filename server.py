@@ -697,6 +697,59 @@ def require_login():
         return jsonify({'status': 'error', 'message': '未登录或登录已过期'}), 401
     return redirect(url_for('login', next=request.path))
 
+# ---- 登录失败限流（内存计数，重启清零）----
+LOGIN_MAX_FAILS = 5
+LOGIN_WINDOW = 15 * 60      # 15 分钟内
+LOGIN_LOCK_SECONDS = 10 * 60  # 锁 10 分钟
+
+_login_guard = {}
+_login_guard_lock = threading.Lock()
+
+
+def _login_key(username):
+    return f"{(request.remote_addr or '?')}|{(username or '').strip().lower()}"
+
+
+def login_locked_for(key):
+    """返回剩余锁定秒数，0 表示未锁定"""
+    now = time.time()
+    with _login_guard_lock:
+        state = _login_guard.get(key)
+        if not state:
+            return 0
+        if state.get('until', 0) > now:
+            return int(state['until'] - now)
+        if now - state.get('first', 0) > LOGIN_WINDOW:
+            _login_guard.pop(key, None)
+        return 0
+
+
+def login_record_fail(key):
+    now = time.time()
+    with _login_guard_lock:
+        # 顺带清理过大的表，避免长期运行后无限增长
+        if len(_login_guard) > 2000:
+            for k, v in list(_login_guard.items()):
+                if now - v.get('first', 0) > LOGIN_WINDOW and v.get('until', 0) <= now:
+                    _login_guard.pop(k, None)
+
+        state = _login_guard.get(key)
+        if not state or now - state.get('first', 0) > LOGIN_WINDOW:
+            state = {'count': 0, 'first': now, 'until': 0}
+        state['count'] += 1
+        if state['count'] >= LOGIN_MAX_FAILS:
+            state['until'] = now + LOGIN_LOCK_SECONDS
+            state['count'] = 0
+            state['first'] = now
+            print(f"[登录] {key} 连续失败 {LOGIN_MAX_FAILS} 次，锁定 {LOGIN_LOCK_SECONDS // 60} 分钟")
+        _login_guard[key] = state
+
+
+def login_record_success(key):
+    with _login_guard_lock:
+        _login_guard.pop(key, None)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if not AUTH_ENABLED:
@@ -707,10 +760,20 @@ def login():
     if request.method == 'POST':
         username = (request.form.get('username') or '').strip()
         password = request.form.get('password') or ''
+        key = _login_key(username)
+
+        wait = login_locked_for(key)
+        if wait:
+            error = f'登录失败次数过多，请 {max(1, (wait + 59) // 60)} 分钟后再试'
+            return render_template('login.html', error=error,
+                                   next=request.args.get('next', ''), username=username), 429
+
         user = db.get_user(username) if username else None
         if user and not user.get('active', 1):
+            login_record_fail(key)
             error = '账号已被禁用，请联系管理员'
         elif user and check_password_hash(user['password_hash'], password):
+            login_record_success(key)
             session.clear()
             session['uid'] = user['id']
             session['username'] = user['username']
@@ -722,8 +785,10 @@ def login():
             if not target.startswith('/') or target.startswith('//'):
                 target = '/'
             return redirect(target)
-        # 不区分「用户不存在」和「密码错误」，避免账号枚举
-        error = '用户名或密码不正确'
+        else:
+            login_record_fail(key)
+            # 不区分「用户不存在」和「密码错误」，避免账号枚举
+            error = '用户名或密码不正确'
 
     return render_template('login.html', error=error,
                            next=request.args.get('next', ''), username=username)
