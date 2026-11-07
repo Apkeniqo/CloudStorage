@@ -8,6 +8,7 @@ html {
     /* Fluent 风格的选中白条 */
     --side-active-bg: rgba(255, 255, 255, 0.95);
     --side-active-fg: #1a1a1a;
+    --side-indicator: rgba(0, 0, 0, 0.55);
     /* 日间模式 (Light Theme) */
     --accent-color: #0078d4;
     --accent-hover: #106ebe;
@@ -29,6 +30,7 @@ html {
 [data-theme="dark"] {
     --side-active-bg: rgba(255, 255, 255, 0.14);
     --side-active-fg: #ffffff;
+    --side-indicator: rgba(255, 255, 255, 0.88);
     --accent-color: #4cc2ff;
     --accent-hover: #77d1ff;
     --bg-gradient: radial-gradient(at 0% 0%, rgba(76, 194, 255, 0.1) 0px, transparent 50%),
@@ -1032,12 +1034,28 @@ body.app-body {
 
 
 .side-nav {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: 6px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+}
+
+.side-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--side-indicator);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.26s cubic-bezier(0.22, 0.61, 0.36, 1),
+                height 0.26s cubic-bezier(0.22, 0.61, 0.36, 1),
+                opacity 0.18s ease;
 }
 
 .side-item {

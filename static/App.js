@@ -130,6 +130,8 @@ function initApp() {
         });
     }
 
+    window.addEventListener('resize', moveSideIndicator);
+
     // 全选
     const selectAll = document.getElementById('select-all');
     if (selectAll) {
@@ -288,6 +290,32 @@ function updateActiveNav() {
     document.querySelectorAll('.side-item[data-nav]').forEach(el => {
         el.classList.toggle('active', el.dataset.nav === currentView_nav);
     });
+    moveSideIndicator();
+}
+
+// 左侧竖条：跟随当前视图移动（带过渡动画）
+function moveSideIndicator() {
+    const ind = document.getElementById('side-indicator');
+    if (!ind) return;
+    const nav = ind.parentElement;
+    const el = document.querySelector('.side-item[data-nav="' + currentView_nav + '"]');
+    if (!nav || !el) {
+        ind.style.opacity = '0';
+        return;
+    }
+
+    const r = el.getBoundingClientRect();
+    const nr = nav.getBoundingClientRect();
+    if (!r.height) {
+        ind.style.opacity = '0';
+        return;
+    }
+
+    const h = Math.max(14, Math.round(r.height * 0.52));
+    const top = r.top - nr.top + (r.height - h) / 2;
+    ind.style.height = h + 'px';
+    ind.style.transform = 'translateY(' + Math.round(top) + 'px)';
+    ind.style.opacity = '1';
 }
 
 function navTo(view) {
