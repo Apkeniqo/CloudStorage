@@ -557,20 +557,25 @@ async function updateStorageInfo() {
         const res = await fetch('/api/version', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
-        const used = data.storage_used || 0;
-        const limit = data.storage_limit || 0;
+        const info = data.storage || {};
         const fill = document.getElementById('storage-fill');
         const text = document.getElementById('storage-text');
-        if (fill && limit > 0) {
-            fill.style.width = Math.min(100, (used / limit) * 100).toFixed(1) + '%';
-        } else if (fill) {
-            fill.style.width = '0%';
+        const used = typeof info.used === 'number' ? info.used : (data.storage_used || 0);
+        const percent = typeof info.percent === 'number' ? info.percent : 0;
+
+        if (fill) {
+            fill.style.width = Math.min(100, percent).toFixed(1) + '%';
         }
         if (text) {
-            if (limit > 0) {
-                const pct = Math.min(100, Math.round((used / limit) * 100));
-                text.textContent = formatSize(used) + ' 已使用 ' + formatSize(limit)
-                    + ' (' + pct + '%)';
+            if (info.mode === 'quota') {
+                text.textContent = '已用 ' + formatSize(used) + ' / ' + formatSize(info.limit || 0)
+                    + ' (' + Math.round(percent) + '%)';
+                text.title = '剩余 ' + formatSize(info.remaining || 0);
+            } else if (info.mode === 'disk') {
+                text.textContent = '已用 ' + formatSize(used) + ' · 磁盘剩余 '
+                    + formatSize(info.remaining || 0);
+                text.title = '磁盘共 ' + formatSize(info.disk_total || 0)
+                    + '，剩余 ' + formatSize(info.remaining || 0);
             } else {
                 text.textContent = '已使用 ' + formatSize(used) + ' · 不限容量';
             }

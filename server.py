@@ -155,7 +155,7 @@ SETTING_SPECS = [
      'label': '切片强制刷盘', 'help': '开启后每个切片写完都 fsync（更安全但慢），关闭后只保证 .part 原子改名'},
     {'group': '限制', 'key': 'max_storage_mb', 'section': 'LIMIT', 'type': 'int',
      'restart': False, 'label': '存储总量上限 (MB)', 'min': 0, 'max': 10485760,
-     'help': '0 表示不限制；超过后上传与合成都返回 413'},
+     'help': '0 = 跟随磁盘实际容量（显示磁盘剩余）；填具体值时不能超过磁盘当前剩余空间，否则无法保存'},
 
     {'group': '清理', 'key': 'chunk_expire_seconds', 'section': 'CLEANUP', 'type': 'int',
      'restart': False, 'label': '未完成切片过期时间 (秒)', 'min': 60, 'max': 2592000},
@@ -326,6 +326,27 @@ def apply_config_changes(payload):
 
     if errors:
         return [], [], errors
+
+    # 存储上限要和磁盘剩余空间核对：设定值超过磁盘现有剩余则不允许保存
+    if 'max_storage_mb' in payload:
+        try:
+            new_limit_mb = int(str(payload['max_storage_mb']).strip())
+        except (TypeError, ValueError):
+            new_limit_mb = 0
+        if new_limit_mb > 0:
+            free = 0
+            for path in (app.config['UPLOAD_FOLDER'], BASE_DIR):
+                try:
+                    _, _, free = shutil.disk_usage(path)
+                    break
+                except OSError:
+                    continue
+            need = new_limit_mb * 1024 * 1024
+            if free and need > free:
+                return [], [], {
+                    'max_storage_mb': (f'设定 {new_limit_mb} MB 超过磁盘剩余空间 '
+                                       f'{free / 1048576:.1f} MB，无法设定')
+                }
 
     if updates:
         update_config_values(updates)
@@ -718,9 +739,57 @@ def storage_usage():
     return total
 
 
+def disk_space():
+    """存储目录所在磁盘的 (总容量, 已用, 剩余) 字节数"""
+    for path in (app.config['UPLOAD_FOLDER'], BASE_DIR):
+        try:
+            return shutil.disk_usage(path)
+        except OSError:
+            continue
+    return 0, 0, 0
+
+
+def storage_info():
+    """给前端用的存储信息。
+
+    max_storage_mb > 0：按设定配额算剩余；
+    max_storage_mb = 0：跟随磁盘实际容量，剩余就是磁盘剩余空间。
+    """
+    used = storage_usage()
+    total, disk_used, free = disk_space()
+
+    if MAX_STORAGE_MB > 0:
+        limit = MAX_STORAGE_MB * 1024 * 1024
+        mode = 'quota'
+        remaining = max(0, limit - used)
+        percent = (used / limit * 100) if limit else 0
+    else:
+        limit = total
+        mode = 'disk'
+        remaining = free
+        percent = (disk_used / total * 100) if total else 0
+
+    return {
+        'used': used,
+        'limit': limit,
+        'remaining': remaining,
+        'mode': mode,
+        'percent': round(min(100.0, max(0.0, percent)), 1),
+        'disk_total': total,
+        'disk_free': free,
+    }
+
+
 def quota_error(extra_bytes):
-    """超出存储上限时返回 {'message': ...}，否则 None。max_storage_mb=0 表示不限制。"""
+    """超出存储上限时返回 {'message': ...}，否则 None。max_storage_mb=0 表示跟随磁盘。"""
     if MAX_STORAGE_MB <= 0:
+        total, _, free = disk_space()
+        if total and max(0, extra_bytes) > free:
+            return {
+                'used': storage_usage(),
+                'limit': total,
+                'message': f"磁盘空间不足：剩余 {free / 1048576:.1f} MB",
+            }
         return None
     limit = MAX_STORAGE_MB * 1024 * 1024
     used = storage_usage()
@@ -1257,6 +1326,7 @@ def admin_page():
         'uptime': int(time.time() - START_TIME),
         'storage_used': storage_usage(),
         'storage_limit': MAX_STORAGE_MB,
+        'storage': storage_info(),
         'isolate_files': ISOLATE_FILES,
         'files': stats.get('files', 0),
         'bytes': stats.get('bytes', 0),
@@ -1912,6 +1982,7 @@ def api_version():
         'uptime': int(time.time() - START_TIME),
         'storage_used': storage_usage(),
         'storage_limit': MAX_STORAGE_MB * 1024 * 1024 if MAX_STORAGE_MB > 0 else 0,
+        'storage': storage_info(),
     })
 
 
