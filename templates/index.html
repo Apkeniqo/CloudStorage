@@ -31,10 +31,6 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
                     <span>我的文件</span>
                 </a>
-                <a class="side-item" data-nav="shared" onclick="openShares()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
-                    <span>共享</span>
-                </a>
                 <a class="side-item" data-nav="trash" onclick="navTo('trash')">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                     <span>回收站</span>
@@ -132,6 +128,9 @@
         <!-- File List Content Container -->
         <div class="file-list-container view-list" id="file-container">
             <div class="file-header">
+                <div class="col-check">
+                    <input type="checkbox" id="select-all" title="全选">
+                </div>
                 <div>
                     <span class="sortable-col" onclick="handleHeaderClick('name')">
                         名称 <span id="sort-icon-name" class="sort-arrow"></span>
@@ -148,6 +147,14 @@
                     </span>
                 </div>
                 <div style="text-align: right;">操作</div>
+            </div>
+
+            <div class="selection-bar" id="selection-bar">
+                <span class="selection-count">已选 <b id="selection-num">0</b> 项</span>
+                <span class="selection-actions">
+                    <button class="sel-btn" id="sel-delete" onclick="deleteSelected()">删除</button>
+                    <button class="sel-btn ghost" onclick="clearSelection()">取消</button>
+                </span>
             </div>
 
             <div id="file-items-wrapper">

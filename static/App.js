@@ -20,6 +20,7 @@ let rawFilesData = [];
 let currentPath = '';       // 当前所在目录（相对存储根）
 let currentBreadcrumb = [];
 let currentView_nav = 'files';
+const selectedPaths = new Set();     // 多选的文件（相对路径）
 let searchQuery = '';
 let currentSort = localStorage.getItem('fluent_sort') || 'mtime-desc';
 let currentView = localStorage.getItem('fluent_view') || 'list';
@@ -50,6 +51,14 @@ function initApp() {
         itemsWrapper.addEventListener('click', (e) => {
             const target = e.target;
             if (!target || !target.closest) return;
+            const rowCheck = target.closest('.row-check');
+            if (rowCheck) {
+                const p = rowCheck.dataset.path;
+                if (rowCheck.checked) selectedPaths.add(p); else selectedPaths.delete(p);
+                updateSelectionBar();
+                return;
+            }
+
             const restore = target.closest('.restore-btn');
             if (restore) {
                 e.preventDefault();
@@ -118,6 +127,12 @@ function initApp() {
             const c = e.target.closest('.crumb');
             if (c && !c.classList.contains('current')) navigateTo(c.dataset.path || '');
         });
+    }
+
+    // 全选
+    const selectAll = document.getElementById('select-all');
+    if (selectAll) {
+        selectAll.addEventListener('change', () => toggleSelectAll(selectAll.checked));
     }
 
     // 滚到底自动加载下一页
@@ -242,9 +257,11 @@ async function loadFiles(path, opts) {
             const s = document.getElementById('search-input');
             if (s) s.value = '';
         }
+        selectedPaths.clear();
         renderBreadcrumb();
         renderFileList();
         updateActiveNav();
+        playViewAnimation();
     } catch (e) {
         if (statusText) statusText.textContent = '加载失败：' + e;
     }
@@ -319,9 +336,11 @@ async function loadTrash() {
         searchQuery = '';
         const s = document.getElementById('search-input');
         if (s) s.value = '';
+        selectedPaths.clear();
         renderBreadcrumb();
         renderFileList();
         updateActiveNav();
+        playViewAnimation();
     } catch (e) {
         if (statusText) statusText.textContent = '加载失败：' + e;
     }
@@ -748,6 +767,7 @@ function trashItemHtml(file) {
     const sizeText = file.is_dir ? '—' : formatSize(file.size);
     return `
         <div class="file-item trash-row">
+            <div class="col-check"></div>
             <div class="file-name" title="${safeName}">
                 ${icon}
                 <span class="folder-name">${safeName}</span>
@@ -790,8 +810,14 @@ function fileItemHtml(file) {
                <button class="action-btn rename-btn" data-path="${safePath}" title="重命名">${renameIconSvg}</button>
                <button class="action-btn delete-btn" data-path="${safePath}" title="删除">${deleteIconSvg}</button>`);
 
+    const checked = selectedPaths.has(itemPath) ? ' checked' : '';
+    const checkCell = isGuest
+        ? '<div class="col-check"></div>'
+        : `<div class="col-check"><input type="checkbox" class="row-check" data-path="${safePath}"${checked}></div>`;
+
     return `
         <div class="file-item${isDir ? ' is-dir' : ''}">
+            ${checkCell}
             ${nameCell}
             <div class="file-size">${isDir ? '—' : formatSize(file.size)}</div>
             <div class="file-time" title="${file.uploader ? '上传者：' + escapeHtml(file.uploader) : ''}">${formatTime(file.mtime)}</div>
@@ -858,6 +884,68 @@ function renderFileList() {
     }
 
     appendFilePage();
+    updateSelectionBar();
+}
+
+// ---------------- 多选 ----------------
+function updateSelectionBar() {
+    const bar = document.getElementById('selection-bar');
+    const num = document.getElementById('selection-num');
+    const all = document.getElementById('select-all');
+    if (num) num.textContent = String(selectedPaths.size);
+    if (bar) bar.classList.toggle('show', selectedPaths.size > 0);
+
+    if (all) {
+        const total = renderedFiles.length;
+        all.checked = total > 0 && selectedPaths.size >= total;
+        all.indeterminate = selectedPaths.size > 0 && selectedPaths.size < total;
+    }
+}
+
+function clearSelection() {
+    if (!selectedPaths.size) return;
+    selectedPaths.clear();
+    renderFileList();
+}
+
+function toggleSelectAll(checked) {
+    if (checked) {
+        renderedFiles.forEach(f => { if (f.path || f.name) selectedPaths.add(f.path || f.name); });
+    } else {
+        selectedPaths.clear();
+    }
+    renderFileList();
+}
+
+async function deleteSelected() {
+    const paths = Array.from(selectedPaths);
+    if (!paths.length) return;
+    if (!confirm(`删除选中的 ${paths.length} 项？\n会移到回收站，之后可以恢复。`)) return;
+
+    let ok = 0;
+    for (const p of paths) {
+        try {
+            const res = await fetch('/files/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: p })
+            });
+            if (res.ok) ok++;
+        } catch (e) { /* 单条失败继续 */ }
+    }
+    selectedPaths.clear();
+    loadFiles(currentPath);
+    if (ok < paths.length) {
+        alert(`已删除 ${ok} 项，${paths.length - ok} 项失败`);
+    }
+}
+
+// 视图切换动效
+function playViewAnimation() {
+    if (!fileContainer) return;
+    fileContainer.classList.remove('animate');
+    void fileContainer.offsetWidth;
+    fileContainer.classList.add('animate');
 }
 
 // 生成分享链接
