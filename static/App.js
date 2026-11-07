@@ -40,6 +40,7 @@ function initApp() {
 
     initTheme();
     setViewMode(currentView, false);
+    initDragDrop();
 
     // 删除/重命名/分享按钮用事件委托：文件名可能带引号，直接拼 onclick 会坏
     if (itemsWrapper) {
@@ -637,8 +638,12 @@ async function computeFileHash(file) {
 async function uploadFiles() {
     const input = document.getElementById('file-input');
     if (!input || !input.files.length) return;
+    return uploadFileList(Array.from(input.files));
+}
 
-    const files = Array.from(input.files);
+// 真正的上传逻辑：选文件、拖拽都走这里
+async function uploadFileList(files) {
+    if (!files || !files.length) return;
     totalFilesCount += files.length;
     updateToastTitle();
 
@@ -681,6 +686,87 @@ async function uploadFiles() {
     }
 
     input.value = ''; // 清空选择
+}
+
+// ---------------- 拖拽上传 ----------------
+let dragDepth = 0;
+
+// 从 DataTransfer 里取文件，忽略文件夹
+function collectDroppedFiles(dt) {
+    const out = [];
+    if (!dt) return out;
+
+    if (dt.items && dt.items.length) {
+        for (const item of dt.items) {
+            if (item.kind !== 'file') continue;
+            const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+            if (entry && entry.isDirectory) {
+                console.warn('[上传] 忽略文件夹：' + entry.name);
+                continue;
+            }
+            const file = item.getAsFile();
+            if (file) out.push(file);
+        }
+    }
+
+    if (!out.length && dt.files) {
+        for (const file of dt.files) out.push(file);
+    }
+    return out;
+}
+
+function initDragDrop() {
+    const overlay = document.getElementById('drop-overlay');
+    const hasFiles = (e) => {
+        const types = e.dataTransfer && e.dataTransfer.types;
+        return types ? Array.from(types).indexOf('Files') !== -1 : false;
+    };
+
+    const hide = () => {
+        dragDepth = 0;
+        if (overlay) overlay.classList.remove('show');
+    };
+
+    window.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        dragDepth++;
+        // 访客只读，不给上传入口
+        if (isGuest) return;
+        if (overlay) overlay.classList.add('show');
+    });
+
+    window.addEventListener('dragover', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = isGuest ? 'none' : 'copy';
+        }
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        if (!hasFiles(e)) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) hide();
+    });
+
+    window.addEventListener('drop', (e) => {
+        if (!hasFiles(e)) return;
+        e.preventDefault();
+        hide();
+
+        if (isGuest) {
+            alert('访客只能浏览和下载文件，不能上传');
+            return;
+        }
+
+        const files = collectDroppedFiles(e.dataTransfer);
+        if (!files.length) {
+            alert('没有识别到文件（文件夹暂不支持，请拖入具体文件）');
+            return;
+        }
+        uploadFileList(files);
+    });
 }
 
 // 小文件单流上传处理
