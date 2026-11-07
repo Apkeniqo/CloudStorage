@@ -2172,10 +2172,8 @@ def _trash_entries():
 
 @app.route('/trash')
 def trash_page():
-    user = current_user()
-    if not user:
-        return redirect(url_for('login', next='/trash'))
-    return render_template('trash.html', user=user)
+    # 回收站不再是独立页面，统一回到主界面并用视图参数切换
+    return redirect('/?view=trash')
 
 
 @app.route('/api/trash')

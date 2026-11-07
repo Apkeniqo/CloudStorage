@@ -50,6 +50,18 @@ function initApp() {
         itemsWrapper.addEventListener('click', (e) => {
             const target = e.target;
             if (!target || !target.closest) return;
+            const restore = target.closest('.restore-btn');
+            if (restore) {
+                e.preventDefault();
+                restoreTrash(restore.dataset.trash);
+                return;
+            }
+            const purge = target.closest('.purge-btn');
+            if (purge) {
+                e.preventDefault();
+                purgeTrash(purge.dataset.trash);
+                return;
+            }
             const folder = target.closest('.folder-name');
             if (folder) {
                 e.preventDefault();
@@ -114,6 +126,11 @@ function initApp() {
     }
 
     // 取当前登录用户，用于状态栏显示
+    if (new URLSearchParams(location.search).get('view') === 'trash') {
+        currentView_nav = 'trash';
+        loadTrash();
+    }
+
     fetch('/auth/me', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
@@ -186,6 +203,7 @@ function toggleTheme() {
 }
 
 function requestFileList() {
+    if (currentView_nav === 'trash') return loadTrash();
     loadFiles(currentPath);
 }
 
@@ -216,6 +234,7 @@ async function loadFiles(path, opts) {
             currentBreadcrumb = data.breadcrumb || [];
             currentView_nav = 'files';
         }
+        setMode('files');
 
         rawFilesData = data.items || [];
         if (!opts.keepSearch) {
@@ -261,7 +280,108 @@ function navTo(view) {
         return loadFiles(null);
     }
     if (view === 'trash') {
-        location.href = '/trash';
+        return loadTrash();
+    }
+}
+
+// 切换「文件 / 回收站」两种视图
+function setMode(mode) {
+    const isTrash = mode === 'trash';
+    document.body.classList.toggle('trash-mode', isTrash);
+    const uploadLabel = document.querySelector('.upload-btn-label');
+    if (uploadLabel) uploadLabel.style.display = isTrash ? 'none' : '';
+}
+
+// 加载回收站（不再跳独立页面，直接复用文件列表）
+async function loadTrash() {
+    currentView_nav = 'trash';
+    setMode('trash');
+    try {
+        const res = await fetch('/api/trash', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            if (statusText) statusText.textContent = data.message || '加载失败';
+            return;
+        }
+        const items = data.items || [];
+        currentView_nav = 'trash';
+        currentPath = '';
+        currentBreadcrumb = [{ name: '回收站', path: '' }];
+        setMode('trash');
+        rawFilesData = items.map(it => ({
+            name: it.name,
+            path: it.trash,
+            is_dir: !!it.is_dir,
+            size: it.size || 0,
+            mtime: it.mtime,
+            is_trash: true
+        }));
+        searchQuery = '';
+        const s = document.getElementById('search-input');
+        if (s) s.value = '';
+        renderBreadcrumb();
+        renderFileList();
+        updateActiveNav();
+    } catch (e) {
+        if (statusText) statusText.textContent = '加载失败：' + e;
+    }
+}
+
+async function restoreTrash(trashPath) {
+    try {
+        const res = await fetch('/trash/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash: trashPath })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '恢复失败');
+            return;
+        }
+        loadTrash();
+    } catch (e) {
+        alert('恢复失败：' + e);
+    }
+}
+
+async function purgeTrash(trashPath) {
+    const name = trashPath.split('/').pop().replace(/^\d{8}-\d{6}_/, '');
+    if (!confirm('彻底删除「' + name + '」？此操作不可恢复。')) return;
+    try {
+        const res = await fetch('/trash/purge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash: trashPath })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '删除失败');
+            return;
+        }
+        loadTrash();
+    } catch (e) {
+        alert('删除失败：' + e);
+    }
+}
+
+async function emptyTrash() {
+    const count = rawFilesData.length;
+    if (!count) {
+        alert('回收站已经是空的');
+        return;
+    }
+    if (!confirm('清空回收站里的 ' + count + ' 项？此操作不可恢复。')) return;
+    try {
+        const res = await fetch('/trash/empty', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '清空失败');
+            return;
+        }
+        loadTrash();
+    } catch (e) {
+        alert('清空失败：' + e);
     }
 }
 
@@ -507,7 +627,11 @@ socket.on('connect_error', async () => {
 
 socket.on('file_update', () => {
     // 服务端只发一个"有变化"的信号，具体内容按当前目录重新拉取
-    loadFiles(currentView_nav === 'home' ? null : currentPath, { keepSearch: true });
+    if (currentView_nav === 'trash') {
+        loadTrash();
+    } else {
+        loadFiles(currentView_nav === 'home' ? null : currentPath, { keepSearch: true });
+    }
     updateStorageInfo();
 });
 
@@ -612,11 +736,35 @@ let renderedCount = 0;
 const downloadIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
 const shareIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`;
 const renameIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
+const restoreIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 8.94 10h-2.02A7 7 0 1 1 13 5v3l4-4-4-4v3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>`;
 const deleteIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
 const folderIconSvg = `<svg class="folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
 
+function trashItemHtml(file) {
+    const trashPath = escapeHtml(file.path || file.name);
+    const safeName = escapeHtml(file.name);
+    const icon = file.is_dir ? folderIconSvg : getFileIconSvg(file.name);
+    const sizeText = file.is_dir ? '—' : formatSize(file.size);
+    return `
+        <div class="file-item trash-row">
+            <div class="file-name" title="${safeName}">
+                ${icon}
+                <span class="folder-name">${safeName}</span>
+            </div>
+            <div class="file-size">${sizeText}</div>
+            <div class="file-time">${formatTime(file.mtime)}</div>
+            <div class="file-action">
+                <button class="action-btn restore-btn" data-trash="${trashPath}" title="恢复">${restoreIconSvg}</button>
+                <button class="action-btn delete-btn purge-btn" data-trash="${trashPath}" title="彻底删除">${deleteIconSvg}</button>
+            </div>
+        </div>
+    `;
+}
+
 function fileItemHtml(file) {
+    if (file.is_trash) return trashItemHtml(file);
+
     const itemPath = file.path || file.name;
     const safeName = escapeHtml(file.name);
     const safePath = escapeHtml(itemPath);
@@ -694,9 +842,16 @@ function renderFileList() {
     itemsWrapper.innerHTML = '';
 
     if (files.length === 0) {
-        const emptyMsg = searchQuery
-            ? '未找到匹配的文件'
-            : (isGuest ? '这个文件夹是空的' : '这个文件夹是空的，点击上传或拖入文件');
+        let emptyMsg;
+        if (searchQuery) {
+            emptyMsg = '未找到匹配的文件';
+        } else if (currentView_nav === 'trash') {
+            emptyMsg = '回收站是空的';
+        } else if (isGuest) {
+            emptyMsg = '这个文件夹是空的';
+        } else {
+            emptyMsg = '这个文件夹是空的，点击上传或拖入文件';
+        }
         itemsWrapper.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
         if (fileCount) fileCount.textContent = '0 项';
         return;
