@@ -598,6 +598,28 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
 )
 
+# 个人背景图存放目录（跟数据库同级的 backgrounds/）
+BG_DIR = os.path.join(os.path.dirname(DB_PATH) or BASE_DIR, 'backgrounds')
+try:
+    os.makedirs(BG_DIR, exist_ok=True)
+except OSError as e:
+    print(f"[背景] 目录不可用（{e}），改用程序目录")
+    BG_DIR = os.path.join(BASE_DIR, 'backgrounds')
+    os.makedirs(BG_DIR, exist_ok=True)
+
+BG_EXTS = ('.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp')
+BG_MAX_BYTES = 8 * 1024 * 1024
+
+
+def _bg_path_for(filename):
+    """背景文件名 -> 绝对路径（只允许 BG_DIR 内的文件名）"""
+    if not filename:
+        return None
+    if os.path.basename(filename) != filename:
+        return None
+    return safe_join(BG_DIR, filename)
+
+
 # 使用 SocketIO 支持实时推送
 socketio = SocketIO(
     app,
@@ -1066,14 +1088,85 @@ def inject_auth_flags():
     return {'guest_browse': GUEST_BROWSE}
 
 
+@app.route('/prefs/background', methods=['GET', 'POST'])
+def prefs_background():
+    user = current_user()
+    if not user or not user.get('id'):
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    if request.method == 'GET':
+        current = db.get_background(user['id'])
+        path = _bg_path_for(current)
+        if not path or not os.path.isfile(path):
+            return jsonify({'status': 'none'}), 404
+        resp = send_from_directory(BG_DIR, current)
+        resp.headers['Cache-Control'] = 'private, max-age=0, must-revalidate'
+        return resp
+
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'status': 'error', 'message': '没有选择图片'}), 400
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in BG_EXTS:
+        return jsonify({'status': 'error', 'message': '只支持 jpg / png / webp / gif / bmp'}), 400
+
+    data = file.read()
+    if len(data) > BG_MAX_BYTES:
+        return jsonify({'status': 'error', 'message': '图片不能超过 8MB'}), 413
+    if not data:
+        return jsonify({'status': 'error', 'message': '图片内容为空'}), 400
+
+    # 先删掉旧背景，再写新的
+    old = db.get_background(user['id'])
+    old_path = _bg_path_for(old)
+    if old_path and os.path.isfile(old_path):
+        try:
+            os.remove(old_path)
+        except OSError:
+            pass
+
+    new_name = f"{user['id']}{ext}"
+    target = _bg_path_for(new_name)
+    with open(target, 'wb') as f:
+        f.write(data)
+
+    db.set_background(user['id'], new_name)
+    audit('background', new_name, f'{len(data)} bytes')
+    return jsonify({'status': 'success', 'message': '背景已更新'})
+
+
+@app.route('/prefs/background/clear', methods=['POST'])
+def prefs_background_clear():
+    user = current_user()
+    if not user or not user.get('id'):
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    old = db.get_background(user['id'])
+    path = _bg_path_for(old)
+    if path and os.path.isfile(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    db.set_background(user['id'], None)
+    audit('background', '', '恢复默认')
+    return jsonify({'status': 'success', 'message': '已恢复默认背景'})
+
+
 @app.route('/auth/me')
 def auth_me():
     """供前端判断当前会话是否仍然有效"""
     user = current_user() if AUTH_ENABLED else None
+    background = ''
+    if user and user.get('id'):
+        background = db.get_background(user['id']) or ''
+
     return jsonify({
         'authenticated': bool(user),
         'username': user['username'] if user else None,
         'role': user['role'] if user else None,
+        'background': bool(background),
     })
 
 # ---------------------------------------------------------------- 管理后台

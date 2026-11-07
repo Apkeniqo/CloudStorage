@@ -1602,3 +1602,48 @@ body.admin-mode .main-pane .container {
     border-radius: calc(var(--radius) * 1.2);
     background: transparent;
 }
+
+/* ---------------- 个人背景 ---------------- */
+body.has-bg {
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+/* 背景图上压一层暗色蒙版，保证文字可读 */
+body.has-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+    z-index: 0;
+}
+
+body.has-bg .app-shell {
+    position: relative;
+    z-index: 1;
+}
+
+.bg-card {
+    width: min(420px, 92vw);
+}
+
+.bg-tip {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.bg-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.sel-btn.accent {
+    background: var(--accent-color);
+    color: #fff;
+}

@@ -152,6 +152,9 @@ function initApp() {
     fetch('/auth/me', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
+            if (data && data.authenticated) {
+                applyBackground(!!data.background);
+            }
             if (data && data.username) {
                 currentUsername = data.username;
                 isGuest = data.role === 'guest';
@@ -1022,6 +1025,68 @@ async function deleteSelected() {
     updateSelectionBar();
     if (ok < paths.length) {
         alert(`完成 ${ok} 项，${paths.length - ok} 项失败`);
+    }
+}
+
+// ---------------- 个人背景 ----------------
+function openBackground() {
+    const modal = document.getElementById('bg-modal');
+    if (modal) modal.classList.add('show');
+}
+
+function closeBackground() {
+    const modal = document.getElementById('bg-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+function applyBackground(has) {
+    document.body.classList.toggle('has-bg', !!has);
+    if (has) {
+        // 加时间戳，换图后立即刷新，避免浏览器缓存
+        document.body.style.backgroundImage = "url('/prefs/background?v=" + Date.now() + "')";
+    } else {
+        document.body.style.backgroundImage = '';
+    }
+}
+
+async function uploadBackground(input) {
+    const file = input.files && input.files[0];
+    input.value = '';                 // 允许重复选同一张
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+        alert('图片不能超过 8MB');
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const res = await fetch('/prefs/background', { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '上传失败');
+            return;
+        }
+        applyBackground(true);
+        closeBackground();
+    } catch (e) {
+        alert('上传失败：' + e);
+    }
+}
+
+async function clearBackground() {
+    try {
+        const res = await fetch('/prefs/background/clear', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '操作失败');
+            return;
+        }
+        applyBackground(false);
+        closeBackground();
+    } catch (e) {
+        alert('操作失败：' + e);
     }
 }
 

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role          TEXT NOT NULL DEFAULT 'user',
     active        INTEGER NOT NULL DEFAULT 1,
+    background    TEXT,
     created_at    REAL NOT NULL,
     last_login_at REAL
 );
@@ -76,6 +77,11 @@ def init(path):
         # 老库补列：users.active（禁用账号）
         try:
             conn.execute("ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+        except sqlite3.OperationalError:
+            pass
+        # 老库补列：users.background（自定义背景文件名）
+        try:
+            conn.execute("ALTER TABLE users ADD COLUMN background TEXT")
         except sqlite3.OperationalError:
             pass
         conn.commit()
@@ -296,3 +302,14 @@ def rename_tree(old_prefix, new_prefix):
         "UPDATE files SET name = ? || substr(name, ?) WHERE name LIKE ?",
         (new_prefix, len(old_prefix) + 1, pattern),
     )
+
+
+# ---------------------------------------------------------------- 个人背景
+
+def set_background(user_id, filename):
+    return _write("UPDATE users SET background = ? WHERE id = ?", (filename, user_id))
+
+
+def get_background(user_id):
+    row = _one("SELECT background FROM users WHERE id = ?", (user_id,))
+    return (row or {}).get('background') or ''
