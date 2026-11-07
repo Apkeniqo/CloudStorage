@@ -8,7 +8,7 @@ html {
     /* Fluent 风格的选中白条 */
     --side-active-bg: rgba(255, 255, 255, 0.95);
     --side-active-fg: #1a1a1a;
-    --side-indicator: rgba(0, 0, 0, 0.55);
+    --side-indicator: var(--accent-color);
     /* 日间模式 (Light Theme) */
     --accent-color: #0078d4;
     --accent-hover: #106ebe;
@@ -30,7 +30,7 @@ html {
 [data-theme="dark"] {
     --side-active-bg: rgba(255, 255, 255, 0.14);
     --side-active-fg: #ffffff;
-    --side-indicator: rgba(255, 255, 255, 0.88);
+    --side-indicator: var(--accent-color);
     --accent-color: #4cc2ff;
     --accent-hover: #77d1ff;
     --bg-gradient: radial-gradient(at 0% 0%, rgba(76, 194, 255, 0.1) 0px, transparent 50%),
@@ -1045,7 +1045,7 @@ body.app-body {
 
 .side-indicator {
     position: absolute;
-    left: 0;
+    left: 6px;
     top: 0;
     width: 3px;
     height: 16px;
@@ -1224,7 +1224,7 @@ body.trash-mode #file-input {
 }
 
 .crumb.current {
-    color: var(--text-main);
+    color: var(--accent-color);
     font-weight: 600;
     cursor: default;
 }
