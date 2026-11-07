@@ -311,10 +311,14 @@ function moveSideIndicator() {
         return;
     }
 
-    const h = Math.max(14, Math.round(r.height * 0.52));
-    const top = r.top - nr.top + (r.height - h) / 2;
+    // 页面整体有 zoom，getBoundingClientRect 是缩放后的像素，而 style.top 是未缩放的 CSS 像素
+    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+    const itemH = r.height / zoom;
+    const h = Math.max(14, Math.round(itemH * 0.52));
+    const top = (r.top - nr.top) / zoom + (itemH - h) / 2;
     ind.style.height = h + 'px';
-    ind.style.transform = 'translateY(' + Math.round(top) + 'px)';
+    ind.style.top = Math.round(top * 10) / 10 + 'px';
+    ind.style.transform = 'none';
     ind.style.opacity = '1';
 }
 
