@@ -1,9 +1,12 @@
 """在线更新：比对远端版本号，只下载有变化需要的文件，不用手动拉取。
 
 用法：
-    python update.py              # 检查并更新
+    python update.py              # 检查、更新，并在写完后自动重启服务
     python update.py --check      # 只检查版本，不改文件
-    python update.py --restart    # 更新后尝试重启 CloudStorage 服务（需要管理员）
+    python update.py --no-restart # 只更新文件，不重启服务
+    python update.py --restart    # 兼容旧用法（现在默认就会重启）
+
+重启需要管理员权限（sc stop/start）。
 
 配置（config.ini 的 [UPDATE] 段）：
     repo   = Apkeniqo/CloudStorage
@@ -18,6 +21,7 @@ import base64
 import configparser
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -163,27 +167,135 @@ def changed_files(files):
     return diff
 
 
-def restart_service():
-    print('尝试重启 CloudStorage 服务 ...')
+SERVICE_NAME = 'CloudStorage'
+
+
+def _sc(*args, timeout=30):
+    """跑 sc.exe，返回 (returncode, stdout, stderr)，失败不抛异常"""
     try:
-        subprocess.run(['sc.exe', 'stop', 'CloudStorage'], check=False,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(3)
-        rc = subprocess.run(['sc.exe', 'start', 'CloudStorage'], check=False).returncode
-    except OSError as e:
-        print('  重启失败：%s' % e)
-        return False
+        proc = subprocess.run(['sc.exe'] + list(args), capture_output=True, text=True,
+                              check=False, timeout=timeout)
+    except (OSError, subprocess.SubprocessError) as e:
+        return 1, '', str(e)
+    return proc.returncode, proc.stdout or '', proc.stderr or ''
+
+
+def service_info():
+    """返回 (状态, 可执行文件路径)；服务不存在时状态为 None"""
+    rc, out, _ = _sc('query', SERVICE_NAME)
     if rc != 0:
-        print('  启动失败（exit %d）。请用管理员权限手动执行 Restart-Service CloudStorage。' % rc)
-        return False
-    print('  服务已重启')
-    return True
+        return None, ''
+    m = re.search(r'STATE\s*:\s*\d+\s+(\w+)', out)
+    state = m.group(1).upper() if m else 'UNKNOWN'
+
+    rc, out, _ = _sc('qc', SERVICE_NAME)
+    m = re.search(r'BINARY_PATH_NAME\s*:\s*(.+)', out)
+    return state, (m.group(1).strip() if m else '')
+
+
+def _service_exe(binary_path):
+    """从 BINARY_PATH_NAME 里取出 exe 路径（可能带引号 + 参数）"""
+    if not binary_path:
+        return ''
+    if binary_path.startswith('"'):
+        end = binary_path.find('"', 1)
+        return binary_path[1:end] if end > 0 else ''
+    return binary_path.split(' ')[0]
+
+
+def _broken_venv(exe):
+    """venv 的启动器还在、但基础解释器被删了 —— 这种服务一起来就会失败。
+    返回问题描述，没问题返回空串。"""
+    scripts = os.path.dirname(exe)
+    cfg = os.path.join(os.path.dirname(scripts), 'pyvenv.cfg')
+    if not os.path.isfile(cfg):
+        return ''
+    try:
+        with open(cfg, encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except OSError:
+        return ''
+    m = re.search(r'^\s*home\s*=\s*(.+)$', content, re.M)
+    if not m:
+        return ''
+    home = m.group(1).strip()
+    base = os.path.join(home, 'python.exe')
+    if os.path.isfile(base):
+        return ''
+    return 'venv 的基础解释器不存在：%s' % base
+
+
+def wait_state(target, timeout=60, interval=1.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        state, _ = service_info()
+        if state is None:
+            return False
+        if state == target:
+            return True
+        time.sleep(interval)
+    return False
+
+
+def restart_service(timeout=60):
+    """重启 CloudStorage 服务。返回 'ok' / 'skip'（没装服务）/ 'fail'"""
+    print('重启 %s 服务 ...' % SERVICE_NAME)
+
+    state, binary = service_info()
+    if state is None:
+        print('  未找到名为 %s 的服务，跳过重启。' % SERVICE_NAME)
+        print('  如果是用 python server.py / service.py 手动运行的，请自己重启进程。')
+        return 'skip'
+
+    # 先确认服务的可执行文件还在：否则一停就起不来，反而把服务弄挂
+    exe = _service_exe(binary)
+    if not exe or not os.path.isfile(exe):
+        print('  服务的可执行文件不存在：%s' % (exe or '(空)'))
+        print('  为避免停掉服务却起不来，这次不重启。请先修好运行环境（例如重建 .venv）。')
+        return 'fail'
+
+    problem = _broken_venv(exe)
+    if problem:
+        print('  %s' % problem)
+        print('  服务现在停掉就起不来，所以这次不重启。请先重建 .venv 再执行 Restart-Service %s。'
+              % SERVICE_NAME)
+        return 'fail'
+
+    print('  当前状态：%s' % state)
+
+    if state != 'STOPPED':
+        rc, out, err = _sc('stop', SERVICE_NAME)
+        if rc != 0:
+            print('  停止失败（exit %d）：%s' % (rc, (err or out).strip()))
+            if rc == 5:
+                print('  需要管理员权限，请以管理员身份运行更新。')
+            return 'fail'
+        if not wait_state('STOPPED', timeout=timeout):
+            print('  等待停止超时（%ds），请手动检查。' % timeout)
+            return 'fail'
+        print('  已停止')
+
+    rc, out, err = _sc('start', SERVICE_NAME)
+    if rc != 0 and rc != 1056:          # 1056 = 服务已在运行
+        print('  启动失败（exit %d）：%s' % (rc, (err or out).strip()))
+        if rc == 5:
+            print('  需要管理员权限，请以管理员身份运行更新。')
+        return 'fail'
+
+    if not wait_state('RUNNING', timeout=timeout):
+        print('  已下发启动命令，但 %ds 内没有进入 RUNNING，请检查 logs\\cloudstorage.log。' % timeout)
+        return 'fail'
+
+    print('  服务已重启，当前状态：RUNNING')
+    return 'ok'
 
 
 def main():
     parser = argparse.ArgumentParser(description='CloudStorage 在线更新')
     parser.add_argument('--check', action='store_true', help='只检查版本，不写入文件')
-    parser.add_argument('--restart', action='store_true', help='更新后重启 Windows 服务')
+    parser.add_argument('--no-restart', action='store_true', help='更新后不重启服务')
+    parser.add_argument('--restart', action='store_true',
+                        help='兼容旧用法：更新后重启服务（现在默认就会重启）')
     args = parser.parse_args()
 
     repo, branch, token = load_config()
@@ -224,11 +336,25 @@ def main():
         write_file(path, content)
     print('更新完成：%d 个文件已写入' % len(diff))
 
-    if args.restart:
-        restart_service()
-    else:
-        print('重启服务后生效：Restart-Service CloudStorage')
-    return 0
+    if not diff:
+        print('远端内容与本地一致，无需重启。')
+        return 0
+
+    if args.no_restart:
+        print('（--no-restart）文件已更新，但服务没重启，新版本还没生效。')
+        print('需要时执行：Restart-Service %s' % SERVICE_NAME)
+        return 0
+
+    # 默认：更新完立刻重启，让新代码马上生效
+    result = restart_service()
+    if result == 'ok':
+        return 0
+    if result == 'skip':
+        print('文件已更新。没有可重启的服务，请手动重启进程使新版本生效。')
+        return 0
+
+    print('文件已更新，但服务重启失败；新版本暂时不会生效。')
+    return 1
 
 
 if __name__ == '__main__':

@@ -335,3 +335,15 @@ python server.py --set-password admin
 5. **浏览器连接数**：HTTP/1.1 下同源最多 6 条连接，实时推送会占用 1–2 条，所以分片并发默认 4 条；不要盲目调大。
 
 服务端每个切片默认不再强制 fsync（`[UPLOAD] fsync_chunks = false`）。如果更在意断电安全而不是速度，可以在后台把它打开。
+
+## 更新
+
+```
+.\update.cmd              # 检查 → 下载变更 → 自动重启服务
+.\update.cmd --check      # 只看有没有新版本
+.\update.cmd --no-restart # 只更新文件，稍后手动重启
+```
+
+更新完会等 `sc stop` 变成 STOPPED 再 `sc start`，最后确认 RUNNING；不是管理员运行时会明确提示权限不足。
+
+重启前会先检查服务可执行文件和 venv 的基础解释器是否还在——如果环境已经坏了，会拒绝重启并在窗口里说明原因（否则服务一停就起不来）。

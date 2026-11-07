@@ -1,6 +1,6 @@
 @echo off
-rem One-click updater: compares the remote version and downloads changes.
-rem Usage: double-click, or run .\update.cmd [--check] [--restart]
+rem One-click updater: compares remote version, downloads changes, then restarts the service.
+rem Usage: double-click, or run .\update.cmd [--check] [--no-restart]
 setlocal
 cd /d "%~dp0"
 if exist "%~dp0.venv\Scripts\python.exe" (
