@@ -1714,7 +1714,7 @@ def check_chunks():
         except Exception as e:
             print(f"读取切片目录失败: {e}")
             
-    return jsonify({'uploadedChunks': uploaded_chunks})
+    return jsonify({'uploadedChunks': uploaded_chunks, 'storage': storage_info()})
 
 # 接收切片
 @app.route('/upload/chunk', methods=['POST'])
@@ -1754,6 +1754,22 @@ def upload_chunk():
         chunk_path = safe_join(chunk_dir, str(int(chunk_index)))
         if chunk_path is None:
             return jsonify({'status': 'error', 'message': '路径非法'}), 400
+
+        # 容量校验：客户端会带 X-File-Size（整个文件大小），没有就按本片大小算
+        try:
+            declared_size = int(request.headers.get('X-File-Size') or 0)
+        except (TypeError, ValueError):
+            declared_size = 0
+        need_bytes = declared_size if declared_size > 0 else (request.content_length or 0)
+        quota = quota_error(need_bytes)
+        if quota:
+            return jsonify({'status': 'error', 'message': quota['message'], 'quota': True}), 413
+
+        # 磁盘真的写不下这一片时提前返回，避免 OSError: No space left
+        _, _, _free = disk_space()
+        if _free and (request.content_length or 0) > _free:
+            return jsonify({'status': 'error', 'message': '磁盘空间不足，上传已中止',
+                            'quota': True}), 413
 
         # 可选：客户端算好的 CRC32（十六进制），落盘时同步计算并比对
         expected_crc = (request.headers.get('X-Chunk-Crc32') or '').strip().lower()

@@ -1416,6 +1416,18 @@ async function uploadFileList(files) {
     const container = document.getElementById('upload-list-container');
     if (toast) toast.classList.remove('hidden');
 
+    // 先问一次剩余容量，超出的文件直接拦下，避免白传
+    let remainingBytes = -1;
+    try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        if (res.ok) {
+            const d = await res.json();
+            if (d.storage && typeof d.storage.remaining === 'number') {
+                remainingBytes = d.storage.remaining;
+            }
+        }
+    } catch (e) { /* 拿不到就交给服务端拦截 */ }
+
     for (const file of files) {
         const taskId = 'task-' + Math.random().toString(36).substring(2, 9);
         
@@ -1438,16 +1450,40 @@ async function uploadFileList(files) {
         `;
         if (container) container.appendChild(itemCard);
 
+        // 容量预检：放不下就不传
+        if (remainingBytes >= 0 && file.size > remainingBytes) {
+            const st = document.getElementById('speed-' + taskId);
+            if (st) {
+                st.textContent = '空间不足：需要 ' + formatSize(file.size)
+                    + '，剩余 ' + formatSize(remainingBytes);
+                st.style.color = '#ff6b6b';
+            }
+            finishTask(taskId);
+            continue;
+        }
+
         // 根据文件大小进行智能路由分流
         const LARGE_FILE_THRESHOLD = 200 * 1024 * 1024; // 200MB
 
-        if (file.size < LARGE_FILE_THRESHOLD) {
-            // 小文件：单流上传
-            await uploadSingleFileStream(file, taskId);
-        } else {
-            // 大文件：分片并发上传
-            await uploadLargeFileChunks(file, taskId);
+        try {
+            if (file.size < LARGE_FILE_THRESHOLD) {
+                // 小文件：单流上传
+                await uploadSingleFileStream(file, taskId);
+            } else {
+                // 大文件：分片并发上传
+                await uploadLargeFileChunks(file, taskId);
+            }
+        } catch (e) {
+            const st = document.getElementById('speed-' + taskId);
+            if (st) {
+                st.textContent = (e && e.message) ? e.message : '上传失败';
+                st.style.color = '#ff6b6b';
+            }
+            finishTask(taskId);
+            continue;
         }
+
+        if (remainingBytes >= 0) remainingBytes -= file.size;
     }
 
     input.value = ''; // 清空选择
@@ -1566,7 +1602,15 @@ function uploadSingleFileStream(file, taskId) {
                 updateProgress(taskId, file.size, file.size);
                 if (speedText) speedText.textContent = "已完成";
             } else {
-                if (speedText) speedText.textContent = "上传失败";
+                let msg = '上传失败 (' + xhr.status + ')';
+                try {
+                    const info = JSON.parse(xhr.responseText || '{}');
+                    if (info && info.message) msg = info.message;
+                } catch (e) { /* 不是 JSON 就用默认文案 */ }
+                if (speedText) {
+                    speedText.textContent = msg;
+                    speedText.style.color = '#ff6b6b';
+                }
             }
             finishTask(taskId);
             resolve();
@@ -1624,6 +1668,14 @@ async function uploadLargeFileChunks(file, taskId) {
         if (checkRes.ok) {
             const checkData = await checkRes.json();
             uploadedChunks = checkData.uploadedChunks || [];
+
+            // 剩余容量不够就直接拦下，不用白传
+            const info = checkData.storage || {};
+            const remaining = typeof info.remaining === 'number' ? info.remaining : -1;
+            if (remaining >= 0 && file.size > remaining) {
+                throw new Error('剩余空间不足：需要 ' + formatSize(file.size)
+                    + '，只剩 ' + formatSize(remaining));
+            }
         }
     } catch (e) {
         console.warn("检查切片失败，默认从头上传:", e);
@@ -1766,6 +1818,7 @@ async function uploadLargeFileChunks(file, taskId) {
                 xhr.setRequestHeader('X-Upload-Mode', 'raw');
                 xhr.setRequestHeader('X-File-Hash', fileHash);
                 xhr.setRequestHeader('X-Chunk-Index', String(chunkIndex));
+                xhr.setRequestHeader('X-File-Size', String(file.size));
                 xhr.setRequestHeader('Content-Type', 'application/octet-stream');
                 if (crc) {
                     xhr.setRequestHeader('X-Chunk-Crc32', crc);
