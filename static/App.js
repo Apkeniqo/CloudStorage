@@ -283,6 +283,43 @@ function formatSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
+// 速度采样器：每 500ms 用最近 1 秒真正走过的字节算一次速度。
+// 没有数据流动时直接显示 0 B/s，而不是停在上一次的数值上。
+function createSpeedMeter(speedEl, windowMs = 1000) {
+    let total = 0;
+    let samples = [{ t: Date.now(), bytes: 0 }];
+
+    const timer = setInterval(() => {
+        const now = Date.now();
+        samples.push({ t: now, bytes: total });
+        while (samples.length > 2 && now - samples[0].t > windowMs) samples.shift();
+
+        const first = samples[0];
+        const dt = (now - first.t) / 1000;
+        const moved = total - first.bytes;
+
+        let speed = dt > 0 ? moved / dt : 0;
+        if (!isFinite(speed) || speed < 0) speed = 0;
+        // 低于 512 B/s 一律当 0，避免显示 3 B/s 这种噪声
+        if (speed < 512) speed = 0;
+
+        if (speedEl) speedEl.textContent = formatSize(speed) + '/s';
+    }, 500);
+
+    return {
+        set(bytes) {
+            if (typeof bytes === 'number' && bytes > total) total = bytes;
+        },
+        reset(bytes) {
+            total = Math.max(0, bytes || 0);
+            samples = [{ t: Date.now(), bytes: total }];
+        },
+        stop() {
+            clearInterval(timer);
+        }
+    };
+}
+
 function formatTime(timestamp) {
     const date = new Date(timestamp * 1000);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -663,31 +700,16 @@ function uploadSingleFileStream(file, taskId) {
             file: file
         });
 
-        let lastSampleTime = Date.now();
-        let lastSampleBytes = 0;
+        const speedMeter = createSpeedMeter(speedText);
 
         xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                // 更新进度条
-                updateProgress(taskId, e.loaded, e.total);
-
-                // 平滑计算实时网速
-                const now = Date.now();
-                const timeDiff = (now - lastSampleTime) / 1000;
-
-                if (timeDiff >= 0.3 || e.loaded === e.total) {
-                    const bytesDiff = e.loaded - lastSampleBytes;
-                    if (bytesDiff > 0 && timeDiff > 0) {
-                        const speed = bytesDiff / timeDiff;
-                        if (speedText) speedText.textContent = formatSize(speed) + '/s';
-                    }
-                    lastSampleTime = now;
-                    lastSampleBytes = e.loaded;
-                }
-            }
+            if (!e.lengthComputable) return;
+            updateProgress(taskId, e.loaded, e.total);
+            speedMeter.set(e.loaded);
         };
 
         xhr.onload = () => {
+            speedMeter.stop();
             if (xhr.status === 200) {
                 updateProgress(taskId, file.size, file.size);
                 if (speedText) speedText.textContent = "已完成";
@@ -699,12 +721,14 @@ function uploadSingleFileStream(file, taskId) {
         };
 
         xhr.onerror = () => {
+            speedMeter.stop();
             if (speedText) speedText.textContent = "网络错误";
             finishTask(taskId);
             resolve();
         };
 
         xhr.onabort = () => {
+            speedMeter.stop();
             if (speedText) speedText.textContent = "已取消";
             finishTask(taskId);
             resolve();
@@ -782,8 +806,8 @@ async function uploadLargeFileChunks(file, taskId) {
 
     const initialUploadedBytes = uploadedChunkIndices.reduce((sum, idx) => sum + getChunkSize(idx), 0);
     
-    let lastSampleTime = Date.now();
-    let lastSampleBytes = initialUploadedBytes;
+    const speedMeter = createSpeedMeter(speedText);
+    speedMeter.reset(initialUploadedBytes);
     let loadedBytesMap = {};
 
     updateProgress(taskId, initialUploadedBytes, file.size);
@@ -854,19 +878,7 @@ async function uploadLargeFileChunks(file, taskId) {
                         Object.values(loadedBytesMap).reduce((a, b) => a + b, 0);
 
                     updateProgress(taskId, currentUploaded, file.size);
-
-                    const now = Date.now();
-                    const timeDiff = (now - lastSampleTime) / 1000;
-
-                    if (timeDiff >= 0.3 || currentUploaded === file.size) {
-                        const bytesDiff = currentUploaded - lastSampleBytes;
-                        if (bytesDiff >= 0 && timeDiff > 0) {
-                            const speed = bytesDiff / timeDiff;
-                            if (speedText) speedText.textContent = formatSize(speed) + '/s';
-                        }
-                        lastSampleTime = now;
-                        lastSampleBytes = currentUploaded;
-                    }
+                    speedMeter.set(currentUploaded);
                 };
 
                 xhr.onload = () => {
@@ -920,10 +932,13 @@ async function uploadLargeFileChunks(file, taskId) {
             return !task || task.isCancelled;
         });
     } catch (err) {
+        speedMeter.stop();
         if (speedText) speedText.textContent = err.message === 'cancelled' ? "已取消" : "上传中断";
         finishTask(taskId);
         return;
     }
+
+    speedMeter.stop();
 
     // 7. 发起合并请求
     const task = uploadTasks.get(taskId);
