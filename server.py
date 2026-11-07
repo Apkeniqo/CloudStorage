@@ -2014,7 +2014,7 @@ def api_list():
     if base is None or not os.path.isdir(base):
         return jsonify({'status': 'error', 'message': '目录不存在'}), 404
 
-    crumbs = [{'name': '我的文件', 'path': ''}]
+    crumbs = [{'name': '主页', 'path': ''}]
     acc = ''
     for part in (rel.split('/') if rel else []):
         acc = join_rel(acc, part)

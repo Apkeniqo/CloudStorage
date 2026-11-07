@@ -145,9 +145,9 @@ body {
 
 /* Header / CommandBar */
 .header {
-    padding: 14px 18px 6px;
+    padding: 12px 18px 2px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;   /* 工具栏靠右 */
     align-items: center;
     border-bottom: none;
     flex-wrap: wrap; /* 允许小屏下自动换行 */
@@ -725,11 +725,32 @@ body {
     white-space: nowrap;
 }
 
-.header .search-box {
-    flex: 0 1 440px;
-    width: 440px;
-    max-width: 46%;
-    margin: 0 auto;
+.header .sidebar-toggle {
+    margin-right: auto;          /* 侧边栏开关留在最左 */
+}
+
+.title-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 0 18px 6px;
+    min-height: 34px;
+}
+
+.title-row .breadcrumb {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.title-row .search-box {
+    flex: 0 0 auto;
+    width: 280px;
+    max-width: 42%;
+    margin: 0;
 }
 
 .header .toolbar {
@@ -798,6 +819,22 @@ body {
 
     .topbar-title {
         display: none;
+    }
+
+    .title-row {
+        padding: 0 12px 6px;
+        gap: 8px;
+    }
+
+    .title-row .breadcrumb {
+        flex: 0 1 auto;
+        max-width: 46%;
+    }
+
+    .title-row .search-box {
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
     }
 
     .mobile-more {
@@ -1442,6 +1479,22 @@ body.trash-mode #file-input {
         display: none;
     }
 
+    .title-row {
+        padding: 0 12px 6px;
+        gap: 8px;
+    }
+
+    .title-row .breadcrumb {
+        flex: 0 1 auto;
+        max-width: 46%;
+    }
+
+    .title-row .search-box {
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+    }
+
     .file-list-container {
         margin: 0 8px 4px;
         padding: 8px;
@@ -1695,4 +1748,19 @@ html:not([data-theme="dark"]) body.has-bg .file-list-container {
 /* 低分辨率背景放大时平滑插值，避免出现马赛克 */
 body.has-bg::before {
     image-rendering: auto;
+}
+
+/* 文件夹行整行可点开 */
+.file-item.is-dir {
+    cursor: pointer;
+}
+
+.file-item.is-dir:hover {
+    background: var(--hover-bg);
+}
+
+/* 路径末尾的斜杠 */
+.crumb-trail {
+    margin-left: 2px;
+    color: var(--text-secondary);
 }

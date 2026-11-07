@@ -60,6 +60,14 @@ function initApp() {
                 return;
             }
 
+            // 文件夹整行都能点开（操作按钮和复选框除外）
+            const dirRow = target.closest('.file-item.is-dir');
+            if (dirRow && !target.closest('.file-action') && !target.closest('.col-check')) {
+                e.preventDefault();
+                navigateTo(dirRow.dataset.dirPath);
+                return;
+            }
+
             const restore = target.closest('.restore-btn');
             if (restore) {
                 e.preventDefault();
@@ -285,13 +293,14 @@ function navigateTo(path) {
 function renderBreadcrumb() {
     const el = document.getElementById('breadcrumb');
     if (!el) return;
-    const crumbs = currentBreadcrumb.length ? currentBreadcrumb : [{ name: '我的文件', path: '' }];
+    const crumbs = currentBreadcrumb.length ? currentBreadcrumb : [{ name: '主页', path: '' }];
     el.innerHTML = crumbs.map((c, i) => {
         const sep = i ? '<span class="crumb-sep">/</span>' : '';
         const cls = i === crumbs.length - 1 ? 'crumb current' : 'crumb';
+        const name = i === 0 && !c.path ? '主页' : c.name;
         return sep + '<span class="' + cls + '" data-path="' + escapeHtml(c.path) + '">'
-            + escapeHtml(c.name) + '</span>';
-    }).join('');
+            + escapeHtml(name) + '</span>';
+    }).join('') + '<span class="crumb-sep crumb-trail">/</span>';
 }
 
 function updateActiveNav() {
@@ -891,7 +900,7 @@ function fileItemHtml(file) {
         : `<div class="col-check"><input type="checkbox" class="row-check" data-path="${safePath}"${checked}></div>`;
 
     return `
-        <div class="file-item${isDir ? ' is-dir' : ''}">
+        <div class="file-item${isDir ? ' is-dir' : ''}"${isDir ? ` data-dir-path="${safePath}"` : ''}>
             ${checkCell}
             ${nameCell}
             <div class="file-size">${isDir ? '—' : formatSize(file.size)}</div>
