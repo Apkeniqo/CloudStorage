@@ -1136,6 +1136,25 @@ def prefs_background():
     return jsonify({'status': 'success', 'message': '背景已更新'})
 
 
+@app.route('/prefs/blur', methods=['POST'])
+def prefs_blur():
+    user = current_user()
+    if not user or not user.get('id'):
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    try:
+        panel = int(data.get('panel', 24))
+        bg = int(data.get('bg', 0))
+    except (TypeError, ValueError):
+        return jsonify({'status': 'error', 'message': '参数非法'}), 400
+
+    panel = max(0, min(panel, 40))
+    bg = max(0, min(bg, 30))
+    db.set_blur(user['id'], panel, bg)
+    return jsonify({'status': 'success', 'panel': panel, 'bg': bg})
+
+
 @app.route('/prefs/background/clear', methods=['POST'])
 def prefs_background_clear():
     user = current_user()
@@ -1159,14 +1178,18 @@ def auth_me():
     """供前端判断当前会话是否仍然有效"""
     user = current_user() if AUTH_ENABLED else None
     background = ''
+    blur_panel, blur_bg = 24, 0
     if user and user.get('id'):
         background = db.get_background(user['id']) or ''
+        blur_panel, blur_bg = db.get_blur(user['id'])
 
     return jsonify({
         'authenticated': bool(user),
         'username': user['username'] if user else None,
         'role': user['role'] if user else None,
         'background': bool(background),
+        'blur_panel': blur_panel,
+        'blur_bg': blur_bg,
     })
 
 # ---------------------------------------------------------------- 管理后台

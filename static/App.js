@@ -154,6 +154,10 @@ function initApp() {
         .then(data => {
             if (data && data.authenticated) {
                 applyBackground(!!data.background);
+                applyBlur(
+                    typeof data.blur_panel === 'number' ? data.blur_panel : 24,
+                    typeof data.blur_bg === 'number' ? data.blur_bg : 0
+                );
             }
             if (data && data.username) {
                 currentUsername = data.username;
@@ -1043,10 +1047,55 @@ function applyBackground(has) {
     document.body.classList.toggle('has-bg', !!has);
     if (has) {
         // 加时间戳，换图后立即刷新，避免浏览器缓存
-        document.body.style.backgroundImage = "url('/prefs/background?v=" + Date.now() + "')";
+        document.body.style.setProperty('--bg-image',
+            "url('/prefs/background?v=" + Date.now() + "')");
     } else {
-        document.body.style.backgroundImage = '';
+        document.body.style.removeProperty('--bg-image');
     }
+}
+
+// 模糊程度：文件面板 / 背景
+let blurPanel = 24;
+let blurBg = 0;
+let blurTimer = null;
+
+function applyBlur(panel, bg) {
+    blurPanel = panel;
+    blurBg = bg;
+    const root = document.documentElement;
+    root.style.setProperty('--panel-blur', panel + 'px');
+    root.style.setProperty('--bg-blur', bg + 'px');
+
+    const panelVal = document.getElementById('val-panel');
+    const bgVal = document.getElementById('val-bg');
+    const panelInput = document.getElementById('blur-panel');
+    const bgInput = document.getElementById('blur-bg');
+    if (panelVal) panelVal.textContent = panel + 'px';
+    if (bgVal) bgVal.textContent = bg + 'px';
+    if (panelInput && document.activeElement !== panelInput) panelInput.value = panel;
+    if (bgInput && document.activeElement !== bgInput) bgInput.value = bg;
+}
+
+function onBlurInput(which, value) {
+    const v = Math.max(0, Math.min(which === 'panel' ? 40 : 30, parseInt(value, 10) || 0));
+    if (which === 'panel') {
+        applyBlur(v, blurBg);
+    } else {
+        applyBlur(blurPanel, v);
+    }
+    // 拖动时先本地预览，松手一小会儿后再保存
+    if (blurTimer) clearTimeout(blurTimer);
+    blurTimer = setTimeout(saveBlur, 400);
+}
+
+async function saveBlur() {
+    try {
+        await fetch('/prefs/blur', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ panel: blurPanel, bg: blurBg })
+        });
+    } catch (e) { /* 保存失败不影响当前预览 */ }
 }
 
 async function uploadBackground(input) {

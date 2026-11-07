@@ -314,8 +314,8 @@ body {
     padding: 10px 16px 16px;
     margin: 0 16px 4px;
     background: var(--card-bg);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(var(--panel-blur, 24px)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--panel-blur, 24px)) saturate(180%);
     border: 1px solid var(--card-border);
     border-radius: calc(var(--radius) * 1.2);
     box-shadow: var(--container-shadow, 0 10px 26px rgba(0, 0, 0, 0.10));
@@ -1604,15 +1604,29 @@ body.admin-mode .main-pane .container {
 }
 
 /* ---------------- 个人背景 ---------------- */
+/* 背景：独立固定图层，随窗口自动缩放铺满 */
 body.has-bg {
+    background-image: none;
+    background-color: #0e1116;
+}
+
+body.has-bg::before {
+    content: '';
+    position: fixed;
+    /* 页面整体有 zoom:1.2，固定层会被再放大 1.2 倍：
+       用 6% 内缩抵消缩放，并留出模糊所需的溢出边距，背景始终铺满窗口 */
+    inset: 6%;
+    background-image: var(--bg-image, none);
     background-size: cover;
     background-position: center center;
     background-repeat: no-repeat;
-    background-attachment: fixed;
+    filter: blur(var(--bg-blur, 0px));
+    pointer-events: none;
+    z-index: 0;
 }
 
 /* 背景图上压一层暗色蒙版，保证文字可读 */
-body.has-bg::before {
+body.has-bg::after {
     content: '';
     position: fixed;
     inset: 0;
@@ -1646,4 +1660,36 @@ body.has-bg .app-shell {
 .sel-btn.accent {
     background: var(--accent-color);
     color: #fff;
+}
+
+/* 模糊滑块 */
+.bg-slider-row {
+    margin-top: 14px;
+}
+
+.bg-slider-row label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.bg-slider-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent-color);
+}
+
+.bg-slider-row .val {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* 有自定义背景时，文件面板加厚一点，保证文字可读 */
+body.has-bg .file-list-container {
+    background: rgba(18, 20, 26, 0.78);
+}
+
+html:not([data-theme="dark"]) body.has-bg .file-list-container {
+    background: rgba(255, 255, 255, 0.84);
 }

@@ -215,6 +215,18 @@
                         <button class="sel-btn accent" onclick="document.getElementById('bg-input').click()">选择图片</button>
                         <button class="sel-btn ghost" onclick="clearBackground()">恢复默认</button>
                     </div>
+
+                    <div class="bg-slider-row">
+                        <label>文件区域模糊 <span class="val" id="val-panel">24px</span></label>
+                        <input type="range" id="blur-panel" min="0" max="40" step="1" value="24"
+                               oninput="onBlurInput('panel', this.value)">
+                    </div>
+
+                    <div class="bg-slider-row">
+                        <label>背景模糊 <span class="val" id="val-bg">0px</span></label>
+                        <input type="range" id="blur-bg" min="0" max="30" step="1" value="0"
+                               oninput="onBlurInput('bg', this.value)">
+                    </div>
                 </div>
             </div>
         </div>

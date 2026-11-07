@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     role          TEXT NOT NULL DEFAULT 'user',
     active        INTEGER NOT NULL DEFAULT 1,
     background    TEXT,
+    blur_panel    INTEGER NOT NULL DEFAULT 24,
+    blur_bg       INTEGER NOT NULL DEFAULT 0,
     created_at    REAL NOT NULL,
     last_login_at REAL
 );
@@ -84,6 +86,15 @@ def init(path):
             conn.execute("ALTER TABLE users ADD COLUMN background TEXT")
         except sqlite3.OperationalError:
             pass
+        # 老库补列：模糊程度（文件面板 / 背景）
+        for col, ddl in (
+            ('blur_panel', "ALTER TABLE users ADD COLUMN blur_panel INTEGER NOT NULL DEFAULT 24"),
+            ('blur_bg', "ALTER TABLE users ADD COLUMN blur_bg INTEGER NOT NULL DEFAULT 0"),
+        ):
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
         conn.commit()
     return _db_path
 
@@ -313,3 +324,15 @@ def set_background(user_id, filename):
 def get_background(user_id):
     row = _one("SELECT background FROM users WHERE id = ?", (user_id,))
     return (row or {}).get('background') or ''
+
+
+def set_blur(user_id, panel, bg):
+    return _write("UPDATE users SET blur_panel = ?, blur_bg = ? WHERE id = ?",
+                  (int(panel), int(bg), user_id))
+
+
+def get_blur(user_id):
+    row = _one("SELECT blur_panel, blur_bg FROM users WHERE id = ?", (user_id,))
+    if not row:
+        return 24, 0
+    return row.get('blur_panel', 24), row.get('blur_bg', 0)
