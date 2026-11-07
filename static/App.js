@@ -221,6 +221,7 @@ function toggleTheme() {
 }
 
 function requestFileList() {
+    if (currentView_nav === 'admin') return;      // 管理视图是 iframe，不要被重连刷掉
     if (currentView_nav === 'trash') return loadTrash();
     loadFiles(currentPath);
 }

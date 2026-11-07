@@ -1086,10 +1086,25 @@ body.app-body {
 }
 
 .side-item.active {
-    background: var(--side-active-bg);
-    color: var(--accent-color);
+    background: rgba(255, 255, 255, 0.14);
+    color: #4cc2ff;
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
+}
+
+.side-item.active span,
+.side-item.active .side-label {
+    color: #4cc2ff;
+}
+
+html:not([data-theme="dark"]) .side-item.active {
+    background: rgba(255, 255, 255, 0.95);
+    color: #0078d4;
+}
+
+html:not([data-theme="dark"]) .side-item.active span,
+html:not([data-theme="dark"]) .side-item.active .side-label {
+    color: #0078d4;
 }
 
 .side-item.active svg {
