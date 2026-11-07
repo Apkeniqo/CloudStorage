@@ -15,7 +15,7 @@ import traceback
 import configparser
 from datetime import timedelta
 from flask import (Flask, render_template, request, jsonify, send_from_directory,
-                   session, redirect, url_for, abort)
+                   session, redirect, url_for, abort, has_request_context)
 from flask_socketio import SocketIO, emit
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.exceptions import HTTPException
@@ -151,6 +151,8 @@ SETTING_SPECS = [
     {'group': '限制', 'key': 'max_content_length_mb', 'section': 'LIMIT', 'type': 'int',
      'restart': False, 'label': '单次请求上限 (MB)', 'min': 1, 'max': 1048576,
      'help': '保存后立即生效，只影响之后的请求'},
+    {'group': '上传', 'key': 'fsync_chunks', 'section': 'UPLOAD', 'type': 'bool', 'restart': False,
+     'label': '切片强制刷盘', 'help': '开启后每个切片写完都 fsync（更安全但慢），关闭后只保证 .part 原子改名'},
     {'group': '限制', 'key': 'max_storage_mb', 'section': 'LIMIT', 'type': 'int',
      'restart': False, 'label': '存储总量上限 (MB)', 'min': 0, 'max': 10485760,
      'help': '0 表示不限制；超过后上传与合成都返回 413'},
@@ -269,7 +271,7 @@ def hot_apply(keys):
     """把不需要重启的配置立刻应用到内存"""
     global MAX_CONTENT_LENGTH_MB, MAX_CONTENT_LENGTH, CHUNK_EXPIRE_SECONDS, CLEANUP_INTERVAL_SECONDS
     global LOG_MAX_TOTAL_MB, LOG_MAX_AGE_DAYS, LOG_MAX_FILES, LOG_CHECK_INTERVAL, MAX_STORAGE_MB
-    global ISOLATE_FILES, GUEST_BROWSE
+    global ISOLATE_FILES, GUEST_BROWSE, FSYNC_CHUNKS
 
     if 'max_content_length_mb' in keys:
         MAX_CONTENT_LENGTH_MB = config.getint('LIMIT', 'max_content_length_mb',
@@ -282,6 +284,8 @@ def hot_apply(keys):
         ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=ISOLATE_FILES)
     if 'guest_browse' in keys:
         GUEST_BROWSE = config.getboolean('AUTH', 'guest_browse', fallback=GUEST_BROWSE)
+    if 'fsync_chunks' in keys:
+        FSYNC_CHUNKS = config.getboolean('UPLOAD', 'fsync_chunks', fallback=FSYNC_CHUNKS)
     if 'chunk_expire_seconds' in keys:
         CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds',
                                              fallback=CHUNK_EXPIRE_SECONDS)
@@ -389,6 +393,10 @@ MAX_CONTENT_LENGTH = MAX_CONTENT_LENGTH_MB * 1024 * 1024
 # 存储总量上限（MB，0 = 不限制）
 MAX_STORAGE_MB = config.getint('LIMIT', 'max_storage_mb', fallback=0)
 
+# 每写入一个切片是否强制 fsync。关闭后只保证 .part -> 正式名的原子性，
+# 断电可能丢最近的切片（重传即可），但慢盘/杀毒软件下速度会好很多。
+FSYNC_CHUNKS = config.getboolean('UPLOAD', 'fsync_chunks', fallback=False)
+
 CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds', fallback=3600)
 CLEANUP_INTERVAL_SECONDS = config.getint('CLEANUP', 'cleanup_interval_seconds', fallback=300)
 
@@ -406,6 +414,20 @@ MAX_TOTAL_CHUNKS = 10000
 def is_safe_hash(file_hash):
     # 只允许纯字母、数字、短横线、下划线和点
     return bool(file_hash and re.match(r'^[a-zA-Z0-9_\-\.]+$', file_hash))
+
+def _atomic_replace(src, dst, attempts=8, base_delay=0.05):
+    """原子改名。Windows 上杀毒软件/索引器可能短暂占用文件，
+    直接 os.replace 会抛 PermissionError，这里按指数退避重试。"""
+    last = None
+    for i in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError as e:      # WinError 5 / 32：文件被占用
+            last = e
+            time.sleep(min(base_delay * (2 ** i), 1.0))
+    raise last
+
 
 def is_safe_chunk_index(chunk_index):
     """切片序号必须是纯数字且在合理范围内（挡住 ../../ 之类的注入）"""
@@ -553,7 +575,8 @@ def get_file_list():
     except Exception as e:
         print(f"读取文件错误: {e}")
 
-    user = current_user()
+    # 后台线程（合并、watchdog）里没有请求上下文，current_user() 会抛异常
+    user = current_user() if has_request_context() else None
     if ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'):
         uid = user.get('id')
         file_list = [f for f in file_list
@@ -1470,6 +1493,7 @@ def upload_chunk():
         # 先写 .part 再原子改名：断点续传时绝不会把写了一半的切片当成“已完成”
         part_path = chunk_path + '.part'
         crc = 0
+        started = time.time()
         try:
             with open(part_path, 'wb') as f:
                 if expected_crc:
@@ -1482,7 +1506,8 @@ def upload_chunk():
                 else:
                     shutil.copyfileobj(source, f, length=4 * 1024 * 1024)
                 f.flush()
-                os.fsync(f.fileno())
+                if FSYNC_CHUNKS:
+                    os.fsync(f.fileno())
 
             if expected_crc:
                 actual = format(crc & 0xFFFFFFFF, '08x')
@@ -1491,7 +1516,11 @@ def upload_chunk():
                     print(f"[切片校验失败] {file_hash}#{chunk_index}: 期望 {expected_crc} 实际 {actual}")
                     return jsonify({'status': 'error', 'message': '切片校验失败，请重传'}), 400
 
-            os.replace(part_path, chunk_path)
+            _atomic_replace(part_path, chunk_path)
+
+            cost = time.time() - started
+            if cost > 3:
+                print(f"[上传] 切片 {chunk_index} 落盘耗时 {cost:.1f}s（{os.path.getsize(chunk_path) / 1048576:.1f}MB），磁盘或杀毒软件可能在拖慢上传")
         except Exception:
             try:
                 os.remove(part_path)

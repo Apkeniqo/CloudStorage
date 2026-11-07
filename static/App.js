@@ -11,6 +11,10 @@ const MAX_CHUNK_SIZE = 64 * 1024 * 1024;
 // 太大反而会让服务端线程和磁盘排队，4 是稳妥值。
 const MAX_CONCURRENT_UPLOADS = 4;
 
+// 单条切片连接超过这么久没有进度就主动断开重试（毫秒）。
+// 浏览器对同源只有 6 条连接，卡住的请求会一直占着并发位，越传越慢。
+const STALL_TIMEOUT_MS = 15000;
+
 // 核心状态管理
 let rawFilesData = [];
 let searchQuery = '';
@@ -446,7 +450,44 @@ const CRC_TABLE = (() => {
     return table;
 })();
 
+const crcWorker = (() => {
+    if (typeof Worker === 'undefined') return null;
+    try {
+        const worker = new Worker('/static/crc-worker.js');
+        const pending = new Map();
+        let seq = 0;
+        worker.onmessage = (e) => {
+            const { id, crc, error } = e.data || {};
+            const task = pending.get(id);
+            if (!task) return;
+            pending.delete(id);
+            if (error) task.reject(new Error(error)); else task.resolve(crc);
+        };
+        worker.onerror = () => { pending.forEach(t => t.reject(new Error('worker error'))); pending.clear(); };
+        return {
+            compute(blob) {
+                return new Promise((resolve, reject) => {
+                    const id = ++seq;
+                    pending.set(id, { resolve, reject });
+                    worker.postMessage({ id, blob });
+                });
+            }
+        };
+    } catch (e) {
+        return null;
+    }
+})();
+
 async function chunkCrc32(blob) {
+    // 优先用 Worker：大切片在主线程算 CRC 会卡住页面，进度条就"停住"了
+    if (crcWorker) {
+        try {
+            return await crcWorker.compute(blob);
+        } catch (e) {
+            console.warn('CRC Worker 失败，退回主线程计算:', e);
+        }
+    }
+
     // 分片读，避免一次性把大切片读进内存
     const SLICE = 4 * 1024 * 1024;
     let crc = 0xFFFFFFFF;
@@ -757,7 +798,7 @@ async function uploadLargeFileChunks(file, taskId) {
     const uploadChunkTask = (chunkIndex) => {
         return new Promise((resolve, reject) => {
             let retryCount = 0;
-            const maxRetries = 3;
+            const maxRetries = 4;
             const start = chunkIndex * chunkSize;
             const end = Math.min(file.size, start + chunkSize);
             const chunk = file.slice(start, end);
@@ -765,75 +806,97 @@ async function uploadLargeFileChunks(file, taskId) {
             // 每片只算一次 CRC（重试时复用），算不出来就不带校验头
             let crcPromise = null;
             const getCrc = () => {
-                if (!crcPromise) {
-                    crcPromise = chunkCrc32(chunk).catch(() => null);
-                }
+                if (!crcPromise) crcPromise = chunkCrc32(chunk).catch(() => null);
                 return crcPromise;
             };
 
             const doUpload = async () => {
                 const task = uploadTasks.get(taskId);
-                // 双重容错校验，防止 task 丢失
-                if (!task || task.isCancelled) {
-                    return reject(new Error('cancelled'));
-                }
+                if (!task || task.isCancelled) return reject(new Error('cancelled'));
 
                 const crc = await getCrc();
-                if (!task || task.isCancelled) {
-                    return reject(new Error('cancelled'));
-                }
+                if (!task || task.isCancelled) return reject(new Error('cancelled'));
 
                 const xhr = new XMLHttpRequest();
                 task.activeXHRs.add(xhr);
 
+                // 卡死检测：一段时间没有任何进度就主动断开，交给重试
+                let stallTimer = null;
+                const armStall = () => {
+                    if (stallTimer) clearTimeout(stallTimer);
+                    stallTimer = setTimeout(() => {
+                        console.warn(`[上传] 切片 ${chunkIndex} 超过 ${STALL_TIMEOUT_MS / 1000}s 无进度，断开重试`);
+                        try { xhr.abort(); } catch (e) { /* 已结束 */ }
+                    }, STALL_TIMEOUT_MS);
+                };
+                const disarmStall = () => {
+                    if (stallTimer) { clearTimeout(stallTimer); stallTimer = null; }
+                };
+
+                const scheduleRetry = (reason) => {
+                    disarmStall();
+                    task.activeXHRs.delete(xhr);
+                    if (retryCount >= maxRetries) {
+                        return reject(new Error(`Chunk ${chunkIndex}: ${reason}`));
+                    }
+                    retryCount++;
+                    const delay = Math.min(500 * Math.pow(2, retryCount - 1), 4000) + Math.random() * 300;
+                    console.warn(`[上传] 切片 ${chunkIndex} 重试 ${retryCount}/${maxRetries}（${reason}），${Math.round(delay)}ms 后`);
+                    setTimeout(() => { doUpload().catch(() => {}); }, delay);
+                };
+
                 xhr.upload.onprogress = (e) => {
-                    if (e.lengthComputable) {
-                        loadedBytesMap[chunkIndex] = e.loaded;
+                    if (!e.lengthComputable) return;
+                    armStall();
+                    loadedBytesMap[chunkIndex] = e.loaded;
 
-                        const currentUploaded = initialUploadedBytes + 
-                            Object.values(loadedBytesMap).reduce((a, b) => a + b, 0);
+                    const currentUploaded = initialUploadedBytes +
+                        Object.values(loadedBytesMap).reduce((a, b) => a + b, 0);
 
-                        updateProgress(taskId, currentUploaded, file.size);
+                    updateProgress(taskId, currentUploaded, file.size);
 
-                        const now = Date.now();
-                        const timeDiff = (now - lastSampleTime) / 1000;
+                    const now = Date.now();
+                    const timeDiff = (now - lastSampleTime) / 1000;
 
-                        if (timeDiff >= 0.3 || currentUploaded === file.size) {
-                            const bytesDiff = currentUploaded - lastSampleBytes;
-                            if (bytesDiff >= 0 && timeDiff > 0) {
-                                const speed = bytesDiff / timeDiff;
-                                if (speedText) speedText.textContent = formatSize(speed) + '/s';
-                            }
-                            lastSampleTime = now;
-                            lastSampleBytes = currentUploaded;
+                    if (timeDiff >= 0.3 || currentUploaded === file.size) {
+                        const bytesDiff = currentUploaded - lastSampleBytes;
+                        if (bytesDiff >= 0 && timeDiff > 0) {
+                            const speed = bytesDiff / timeDiff;
+                            if (speedText) speedText.textContent = formatSize(speed) + '/s';
                         }
+                        lastSampleTime = now;
+                        lastSampleBytes = currentUploaded;
                     }
                 };
 
                 xhr.onload = () => {
+                    disarmStall();
                     task.activeXHRs.delete(xhr);
                     if (xhr.status === 200) {
                         loadedBytesMap[chunkIndex] = chunk.size;
                         resolve();
-                    } else if (retryCount < maxRetries) {
-                        retryCount++;
-                        // 指数退避：1s → 2s → 4s，避免服务端抖动时被连续重试打满
-                        setTimeout(doUpload, Math.min(1000 * Math.pow(2, retryCount - 1), 8000));
-                    } else {
-                        reject(new Error(`Chunk error: ${xhr.status}`));
+                        return;
                     }
+                    // 4xx（除 400 切片校验失败）重试也没用
+                    if (xhr.status >= 400 && xhr.status < 500 && xhr.status !== 400) {
+                        return reject(new Error(`Chunk ${chunkIndex} failed: HTTP ${xhr.status}`));
+                    }
+                    scheduleRetry(`HTTP ${xhr.status}`);
                 };
 
-                xhr.onerror = () => {
-                    task.activeXHRs.delete(xhr);
-                    if (retryCount < maxRetries) {
-                        retryCount++;
-                        setTimeout(doUpload, Math.min(1000 * Math.pow(2, retryCount - 1), 8000));
-                    } else {
-                        reject(new Error('Network error'));
+                xhr.onerror = () => scheduleRetry('网络错误');
+
+                xhr.onabort = () => {
+                    const current = uploadTasks.get(taskId);
+                    if (!current || current.isCancelled) {
+                        disarmStall();
+                        task.activeXHRs.delete(xhr);
+                        return reject(new Error('cancelled'));
                     }
+                    scheduleRetry('连接卡住');
                 };
 
+                armStall();
                 // 裸二进制上传：请求体就是切片本身，服务端少一次临时文件落盘
                 xhr.open('POST', '/upload/chunk', true);
                 xhr.setRequestHeader('X-Upload-Mode', 'raw');
@@ -846,7 +909,7 @@ async function uploadLargeFileChunks(file, taskId) {
                 xhr.send(chunk);
             };
 
-            doUpload().catch(() => reject(new Error('Network error')));
+            doUpload().catch((e) => reject(e instanceof Error ? e : new Error('Network error')));
         });
     };
 
@@ -938,12 +1001,24 @@ async function uploadLargeFileChunks(file, taskId) {
     }
 }
 
+const pendingProgress = new Map();
+let progressFrame = null;
+
 function updateProgress(taskId, uploadedBytes, totalBytes) {
-    const percent = Math.min(100, Math.round((uploadedBytes / totalBytes) * 100));
-    const progressBar = document.getElementById(`progress-${taskId}`);
-    const percentText = document.getElementById(`percent-${taskId}`);
-    if (progressBar) progressBar.style.width = percent + '%';
-    if (percentText) percentText.textContent = percent + '%';
+    pendingProgress.set(taskId, [uploadedBytes, totalBytes]);
+    if (progressFrame) return;
+    // 进度事件很密集，合并到每帧一次，避免 DOM 操作抢占上传线程
+    progressFrame = requestAnimationFrame(() => {
+        progressFrame = null;
+        pendingProgress.forEach(([uploaded, total], id) => {
+            const percent = Math.min(100, Math.round((uploaded / total) * 100));
+            const bar = document.getElementById('progress-' + id);
+            const text = document.getElementById('percent-' + id);
+            if (bar) bar.style.width = percent + '%';
+            if (text) text.textContent = percent + '%';
+        });
+        pendingProgress.clear();
+    });
 }
 
 async function poolExecuter(poolLimit, array, iteratorFn, checkCancelledFn) {
