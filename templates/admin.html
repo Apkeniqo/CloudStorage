@@ -378,13 +378,6 @@
         <h2>配置</h2>
         <p class="sub">保存后写回 <code>{{ info.config_path }}</code>，注释和顺序都会保留</p>
 
-        <div class="cfg-search">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-            <input type="text" id="cfg-search" placeholder="搜索设置项（名称 / 说明 / 键名）"
-                   oninput="filterConfig(this.value)" spellcheck="false">
-            <button class="cfg-search-clear" id="cfg-search-clear" onclick="clearConfigSearch()"
-                    title="清空" style="display:none">✕</button>
-        </div>
         <div class="cfg-empty" id="cfg-empty" style="display:none">没有匹配的设置项</div>
 
         {% for group in groups %}
@@ -479,8 +472,6 @@
     // 设置项搜索
     function filterConfig(q) {
         q = (q || '').trim().toLowerCase();
-        const clearBtn = document.getElementById('cfg-search-clear');
-        if (clearBtn) clearBtn.style.display = q ? 'inline' : 'none';
 
         let shown = 0;
         document.querySelectorAll('.config-card .field').forEach(function (f) {
@@ -507,8 +498,6 @@
     }
 
     function clearConfigSearch() {
-        const box = document.getElementById('cfg-search');
-        if (box) { box.value = ''; box.focus(); }
         filterConfig('');
     }
 

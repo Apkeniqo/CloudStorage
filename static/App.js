@@ -312,31 +312,7 @@ function updateActiveNav() {
 
 // 左侧竖条：跟随当前视图移动（带过渡动画）
 function moveSideIndicator() {
-    const ind = document.getElementById('side-indicator');
-    if (!ind) return;
-    const nav = ind.parentElement;
-    const el = document.querySelector('.side-item[data-nav="' + currentView_nav + '"]');
-    if (!nav || !el) {
-        ind.style.opacity = '0';
-        return;
-    }
-
-    const r = el.getBoundingClientRect();
-    const nr = nav.getBoundingClientRect();
-    if (!r.height) {
-        ind.style.opacity = '0';
-        return;
-    }
-
-    // 页面整体有 zoom，getBoundingClientRect 是缩放后的像素，而 style.top 是未缩放的 CSS 像素
-    const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-    const itemH = r.height / zoom;
-    const h = Math.max(14, Math.round(itemH * 0.52));
-    const top = (r.top - nr.top) / zoom + (itemH - h) / 2;
-    ind.style.height = h + 'px';
-    ind.style.top = Math.round(top * 10) / 10 + 'px';
-    ind.style.transform = 'none';
-    ind.style.opacity = '1';
+    // 竖条已经画在 .side-item::before 上，这里不再需要计算位置
 }
 
 function navTo(view) {
@@ -364,6 +340,20 @@ function showAdmin() {
     if (frame && !frame.getAttribute('src')) frame.src = '/admin?embed=1';
     updateActiveNav();
     playViewAnimation();
+
+    const input = document.getElementById('search-input');
+    if (input && input.value) {
+        const frame = document.getElementById('admin-frame');
+        if (frame) {
+            frame.addEventListener('load', function once() {
+                frame.removeEventListener('load', once);
+                const win = adminFrameWindow();
+                if (win && typeof win.filterConfig === 'function') {
+                    setTimeout(() => win.filterConfig(input.value), 60);
+                }
+            });
+        }
+    }
 }
 
 // 切换「文件 / 回收站」两种视图
@@ -828,16 +818,52 @@ document.addEventListener('click', (e) => {
 });
 
 
+function adminFrameWindow() {
+    const fr = document.getElementById('admin-frame');
+    try {
+        return (fr && fr.contentWindow && fr.contentWindow.document) ? fr.contentWindow : null;
+    } catch (e) {
+        return null;
+    }
+}
+
 function handleSearch(query) {
-    searchQuery = query.trim().toLowerCase();    const clearBtn = document.getElementById('clear-search');
-    if (clearBtn) clearBtn.style.display = searchQuery ? 'inline-block' : 'none';
+    const clearBtn = document.getElementById('clear-search');
+    const hasText = !!(query && query.trim());
+    if (clearBtn) clearBtn.style.display = hasText ? 'inline-block' : 'none';
+
+    // 管理后台：搜索框直接过滤设置项
+    if (currentView_nav === 'admin') {
+        const win = adminFrameWindow();
+        if (win && typeof win.filterConfig === 'function') {
+            win.filterConfig(query || '');
+        }
+        return;
+    }
+
+    searchQuery = query.trim().toLowerCase();
     renderFileList();
+}
+
+// 移动端：点搜索图标 → 打开侧边栏并聚焦搜索框
+function focusSearch() {
+    const el = document.getElementById('sidebar');
+    if (el && !el.classList.contains('open') && window.innerWidth <= 900) {
+        el.classList.add('open');
+        document.body.classList.add('sidebar-open');
+    }
+    const input = document.getElementById('search-input');
+    if (input) input.focus();
 }
 
 function clearSearch() {
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = '';
+        if (currentView_nav === 'admin') {
+            const win = adminFrameWindow();
+            if (win && typeof win.clearConfigSearch === 'function') win.clearConfigSearch();
+        }
         handleSearch('');
         searchInput.focus();
     }
