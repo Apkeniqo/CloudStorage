@@ -60,6 +60,19 @@ function initApp() {
                 return;
             }
 
+            // 回收站：单击整行 = 选中（不再跳去原目录）
+            const trashRow = target.closest('.file-item.trash-row');
+            if (trashRow && !target.closest('.file-action') && !target.closest('.col-check')) {
+                const cb = trashRow.querySelector('.row-check');
+                if (cb) {
+                    const p = cb.dataset.path;
+                    cb.checked = !cb.checked;
+                    if (cb.checked) selectedPaths.add(p); else selectedPaths.delete(p);
+                    updateSelectionBar();
+                }
+                return;
+            }
+
             // 文件夹整行都能点开（操作按钮和复选框除外）
             const dirRow = target.closest('.file-item.is-dir');
             if (dirRow && !target.closest('.file-action') && !target.closest('.col-check')) {
@@ -908,9 +921,9 @@ function trashItemHtml(file) {
     return `
         <div class="file-item trash-row">
             <div class="col-check"><input type="checkbox" class="row-check" data-path="${trashPath}"${trashed ? ' checked' : ''}></div>
-            <div class="file-name" title="${safeName}">
+            <div class="file-name" title="${escapeHtml(file.original || file.name)}">
                 ${icon}
-                <span class="folder-name">${safeName}</span>
+                <span class="trash-name">${safeName}</span>
             </div>
             <div class="file-size">${sizeText}</div>
             <div class="file-time">${formatTime(file.mtime)}</div>

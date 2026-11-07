@@ -183,6 +183,11 @@ body {
 
 .mobile-more { display: none; }
 
+/* 桌面端没有二级菜单，这个按钮点了没反应，直接隐藏 */
+.toolbar .mobile-more {
+    display: none;
+}
+
 /* Fluent Search Box */
 .search-box {
     position: relative;
@@ -845,6 +850,10 @@ body {
     }
 
     .mobile-more {
+        display: inline-flex;
+    }
+
+    .toolbar .mobile-more {
         display: inline-flex;
     }
 

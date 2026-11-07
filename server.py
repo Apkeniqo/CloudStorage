@@ -2512,9 +2512,12 @@ def _trash_entries():
                     st = os.stat(full)
                 except OSError:
                     continue
+                rel_dir = os.path.relpath(full, TRASH_DIR).replace('\\', '/')
+                orig_dir = trash_original_name(rel_dir)
                 items.append({
-                    'trash': os.path.relpath(full, TRASH_DIR).replace('\\', '/'),
-                    'name': trash_original_name(os.path.relpath(full, TRASH_DIR).replace('\\', '/')),
+                    'trash': rel_dir,
+                    'name': os.path.basename(orig_dir) or orig_dir,
+                    'original': orig_dir,
                     'size': 0, 'mtime': st.st_mtime, 'is_dir': True,
                 })
             else:
@@ -2527,9 +2530,11 @@ def _trash_entries():
             except OSError:
                 continue
             rel = os.path.relpath(full, TRASH_DIR).replace('\\', '/')
+            orig_file = trash_original_name(rel)
             items.append({
                 'trash': rel,
-                'name': trash_original_name(rel),
+                'name': os.path.basename(orig_file) or orig_file,
+                'original': orig_file,
                 'size': st.st_size,
                 'mtime': st.st_mtime,
                 'is_dir': False,
