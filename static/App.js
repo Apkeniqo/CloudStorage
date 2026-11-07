@@ -209,8 +209,8 @@ async function loadFiles(path, opts) {
 
         if (path === null) {
             currentPath = '';
-            currentBreadcrumb = [{ name: '最近', path: '' }];
-            currentView_nav = 'recent';
+            currentBreadcrumb = [{ name: '主页', path: '' }];
+            currentView_nav = 'home';
         } else {
             currentPath = data.path || '';
             currentBreadcrumb = data.breadcrumb || [];
@@ -257,7 +257,7 @@ function navTo(view) {
     if (view === 'files') {
         return loadFiles('');
     }
-    if (view === 'recent') {
+    if (view === 'home' || view === 'recent') {
         return loadFiles(null);
     }
     if (view === 'trash') {
@@ -369,9 +369,13 @@ async function updateStorageInfo() {
             fill.style.width = '0%';
         }
         if (text) {
-            text.textContent = limit > 0
-                ? '已用 ' + formatSize(used) + ' / ' + formatSize(limit)
-                : '已用 ' + formatSize(used) + ' · 不限容量';
+            if (limit > 0) {
+                const pct = Math.min(100, Math.round((used / limit) * 100));
+                text.textContent = formatSize(used) + ' 已使用 ' + formatSize(limit)
+                    + ' (' + pct + '%)';
+            } else {
+                text.textContent = '已使用 ' + formatSize(used) + ' · 不限容量';
+            }
         }
     } catch (e) { /* 用量展示失败不影响主流程 */ }
 }
@@ -503,7 +507,7 @@ socket.on('connect_error', async () => {
 
 socket.on('file_update', () => {
     // 服务端只发一个"有变化"的信号，具体内容按当前目录重新拉取
-    loadFiles(currentView_nav === 'recent' ? null : currentPath, { keepSearch: true });
+    loadFiles(currentView_nav === 'home' ? null : currentPath, { keepSearch: true });
     updateStorageInfo();
 });
 

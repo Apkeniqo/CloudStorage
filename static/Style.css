@@ -680,10 +680,47 @@ body {
     color: var(--text-secondary);
 }
 
+/* 顶栏：标题 + 居中搜索 + 右侧操作（仿 OneDrive） */
+.topbar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.header .search-box {
+    flex: 0 1 440px;
+    width: 440px;
+    max-width: 46%;
+    margin: 0 auto;
+}
+
+.header .toolbar {
+    flex: 0 0 auto;
+}
+
+.brand-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+.side-storage-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.breadcrumb {
+    padding: 8px 18px 2px;
+    min-height: 34px;
+    border-bottom: 1px solid var(--card-border);
+}
+
 @media (max-width: 640px) {
-    body {
+    body.app-body {
         padding: 0;
-        align-items: stretch;
     }
 
     .container {
@@ -712,11 +749,17 @@ body {
         position: relative;
     }
 
-    .search-box {
+    .search-box,
+    .header .search-box {
         flex: 1 1 auto;
         order: 0;
         width: auto !important;
+        max-width: none;
         min-width: 0;
+    }
+
+    .topbar-title {
+        display: none;
     }
 
     .mobile-more {
@@ -889,7 +932,7 @@ body {
     color: var(--text-secondary);
 }
 /* ================= 侧边栏布局（模仿 OneDrive 网页版） ================= */
-body {
+body.app-body {
     display: block;
     padding: 16px;
 }
@@ -1047,6 +1090,8 @@ body {
 .sidebar-toggle {
     display: none;
 }
+
+
 
 /* 面包屑 */
 .breadcrumb {
@@ -1214,7 +1259,7 @@ body {
 
 /* 窄屏：侧边栏收成抽屉 */
 @media (max-width: 900px) {
-    body {
+    body.app-body {
         padding: 0;
     }
 
