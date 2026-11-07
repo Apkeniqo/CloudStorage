@@ -1899,3 +1899,19 @@ body.sidebar-open {
         zoom: 1;
     }
 }
+
+/* 被剪切的文件：半透明，表示“待移动” */
+.file-item.cutting {
+    opacity: 0.42;
+    transition: opacity 0.15s ease;
+}
+
+/* 被隐藏的文件：只有管理员看得到，压暗并划线 */
+.file-item.is-hidden {
+    opacity: 0.55;
+}
+
+.file-item.is-hidden .file-name-link {
+    text-decoration: line-through;
+    text-decoration-color: var(--text-secondary);
+}

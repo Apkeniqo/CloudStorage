@@ -670,6 +670,19 @@ def get_file_list(path=''):
     isolated = bool(ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'))
     uid = user.get('id') if user else None
 
+    # 隐藏项：只有管理员能看到
+    is_admin = bool(user and user.get('role') == 'admin')
+    try:
+        hidden_set = db.hidden_paths()
+    except Exception as e:
+        print(f"[数据库] 读取隐藏列表失败: {e}")
+        hidden_set = set()
+
+    def is_hidden_rel(rel):
+        if rel in hidden_set:
+            return True
+        return any(rel.startswith(h + '/') for h in hidden_set)
+
     items = []
     try:
         with os.scandir(base) as it:
@@ -679,6 +692,9 @@ def get_file_list(path=''):
                         continue
                     stat = entry.stat()
                     rel = join_rel(path, entry.name)
+                    hidden_self = is_hidden_rel(rel)
+                    if hidden_self and not is_admin:
+                        continue
                     if entry.is_dir():
                         items.append({
                             'name': entry.name,
@@ -686,10 +702,13 @@ def get_file_list(path=''):
                             'is_dir': True,
                             'size': 0,
                             'mtime': stat.st_mtime,
+                            'hidden': hidden_self,
                         })
                     elif entry.is_file():
                         rec = records.get(rel) or {}
                         if isolated and rec.get('uploader_id') != uid:
+                            continue
+                        if hidden_self and not is_admin:
                             continue
                         items.append({
                             'name': entry.name,
@@ -700,6 +719,7 @@ def get_file_list(path=''):
                             'uploader': rec.get('uploader_name'),
                             'uploaded_at': rec.get('created_at'),
                             'sha256': rec.get('sha256'),
+                            'hidden': hidden_self,
                         })
                 except OSError:
                     continue
@@ -2109,6 +2129,16 @@ def folder_create():
 
 @app.route('/download/<path:filename>')
 def download(filename):
+    user = current_user()
+    rel = norm_rel(filename)
+    if rel is not None:
+        try:
+            hidden_set = db.hidden_paths()
+        except Exception:
+            hidden_set = set()
+        is_hidden = rel in hidden_set or any(rel.startswith(h + '/') for h in hidden_set)
+        if is_hidden and not (user and user.get('role') == 'admin'):
+            abort(404)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 
@@ -2258,6 +2288,32 @@ def delete_file():
     broadcast_files()
     return jsonify({'status': 'success', 'message': '已移到回收站',
                     'trash': trashed, 'is_dir': is_dir})
+
+
+# 隐藏 / 取消隐藏（仅管理员）
+@app.route('/files/hide', methods=['POST'])
+def files_hide():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+    if user.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': '只有管理员可以隐藏文件'}), 403
+
+    data = request.get_json(silent=True) or {}
+    rel = norm_rel(data.get('path', ''))
+    if not rel:
+        return jsonify({'status': 'error', 'message': '路径非法'}), 400
+
+    target = store_path(rel)
+    if target is None or not os.path.exists(target):
+        return jsonify({'status': 'error', 'message': '文件不存在'}), 404
+
+    hidden = bool(data.get('hidden', True))
+    db.set_hidden(rel, hidden)
+    audit('hide' if hidden else 'unhide', rel, '')
+    broadcast_files()
+    return jsonify({'status': 'success', 'hidden': hidden,
+                    'message': '已隐藏' if hidden else '已取消隐藏'})
 
 
 # 复制 / 移动（剪切 + 粘贴）
@@ -2418,6 +2474,10 @@ def rename_file():
     except Exception as e:
         print(f"[数据库] 同步重命名失败: {e}")
 
+    try:
+        db.rename_hidden(rel, new_rel)
+    except Exception as e:
+        print(f"[隐藏] 重命名同步失败: {e}")
     audit('rename', rel, f'-> {new_rel}')
     print(f"[重命名] {rel} -> {new_rel}（操作人 {user['username']}）")
     broadcast_files()

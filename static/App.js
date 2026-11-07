@@ -98,6 +98,19 @@ function initApp() {
                 renameFile(ren.dataset.path, ren.dataset.dir === '1');
                 return;
             }
+            const hideBtn2 = target.closest('.hide-btn');
+            if (hideBtn2) {
+                e.preventDefault();
+                toggleHidden(hideBtn2.dataset.path, true);
+                return;
+            }
+            const unhideBtn = target.closest('.unhide-btn');
+            if (unhideBtn) {
+                e.preventDefault();
+                toggleHidden(unhideBtn.dataset.path, false);
+                return;
+            }
+
             const share = target.closest('.share-btn');
             if (share) {
                 e.preventDefault();
@@ -168,6 +181,7 @@ function initApp() {
                 );
             }
             if (data && data.username) {
+                isAdmin = data.role === 'admin';
                 currentUsername = data.username;
                 isGuest = data.role === 'guest';
                 if (isGuest) {
@@ -872,12 +886,15 @@ function clearSearch() {
 // 大列表分批渲染：一次只画一页，滚到底再追加，避免几千个文件卡住页面
 const PAGE_SIZE = 200;
 let isGuest = false;
+let isAdmin = false;
 let renderedFiles = [];
 let renderedCount = 0;
 const downloadIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>`;
 const shareIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>`;
 const renameIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
 const restoreIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 1 0 8.94 10h-2.02A7 7 0 1 1 13 5v3l4-4-4-4v3zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>`;
+const eyeOffIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>`;
+const eyeIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>`;
 const deleteIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
 const folderIconSvg = `<svg class="folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
@@ -914,6 +931,18 @@ function fileItemHtml(file) {
     const isDir = !!file.is_dir;
     const downloadUrl = isDir ? '' : '/download/' + encodeURIComponent(itemPath);
 
+    // 剪切中的条目半透明；隐藏的条目只有管理员能看到，也压暗
+    const isCutting = clipboard.mode === 'cut' && clipboard.paths.indexOf(itemPath) !== -1;
+    const rowCls = ['file-item', isDir ? 'is-dir' : '',
+                    file.hidden ? 'is-hidden' : '',
+                    isCutting ? 'cutting' : ''].filter(Boolean).join(' ');
+
+    const hideBtn = isAdmin
+        ? (file.hidden
+            ? `<button class="action-btn unhide-btn" data-path="${safePath}" title="取消隐藏">${eyeIconSvg}</button>`
+            : `<button class="action-btn hide-btn" data-path="${safePath}" title="隐藏（仅管理员可见）">${eyeOffIconSvg}</button>`)
+        : '';
+
     const nameCell = isDir
         ? `<div class="file-name folder" title="${safeName}">
                 ${folderIconSvg}
@@ -927,10 +956,12 @@ function fileItemHtml(file) {
     const actions = isGuest ? (isDir ? '' : `<a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">${downloadIconSvg}</a>`)
         : (isDir
             ? `<button class="action-btn rename-btn" data-path="${safePath}" data-dir="1" title="重命名">${renameIconSvg}</button>
+               ${hideBtn}
                <button class="action-btn delete-btn" data-path="${safePath}" data-dir="1" title="删除">${deleteIconSvg}</button>`
             : `<a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">${downloadIconSvg}</a>
                <button class="action-btn share-btn" data-path="${safePath}" title="分享">${shareIconSvg}</button>
                <button class="action-btn rename-btn" data-path="${safePath}" title="重命名">${renameIconSvg}</button>
+               ${hideBtn}
                <button class="action-btn delete-btn" data-path="${safePath}" title="删除">${deleteIconSvg}</button>`);
 
     const checked = selectedPaths.has(itemPath) ? ' checked' : '';
@@ -939,7 +970,7 @@ function fileItemHtml(file) {
         : `<div class="col-check"><input type="checkbox" class="row-check" data-path="${safePath}"${checked}></div>`;
 
     return `
-        <div class="file-item${isDir ? ' is-dir' : ''}"${isDir ? ` data-dir-path="${safePath}"` : ''}>
+        <div class="${rowCls}"${isDir ? ` data-dir-path="${safePath}"` : ''}>
             ${checkCell}
             ${nameCell}
             <div class="file-size">${isDir ? '—' : formatSize(file.size)}</div>
@@ -1085,6 +1116,26 @@ async function deleteSelected() {
     }
 }
 
+// ---------------- 隐藏 / 取消隐藏（管理员） ----------------
+async function toggleHidden(path, hidden) {
+    try {
+        const res = await fetch('/files/hide', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: path, hidden: hidden })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '操作失败');
+            return;
+        }
+        if (statusText) statusText.textContent = hidden ? '已隐藏（仅管理员可见）' : '已取消隐藏';
+        reloadCurrentView();
+    } catch (e) {
+        alert('操作失败：' + e);
+    }
+}
+
 // ---------------- 个人背景 ----------------
 function openBackground() {
     const modal = document.getElementById('bg-modal');
@@ -1201,6 +1252,7 @@ function copySelection(mode) {
     }
     clipboard = { mode: mode, paths: paths };
     updateClipboardButtons();
+    renderFileList();          // 剪切中的条目半透明显示
     if (statusText) {
         statusText.textContent = (mode === 'cut' ? '已剪切 ' : '已复制 ')
             + paths.length + ' 项，进入目标文件夹后点「粘贴」';
@@ -1242,6 +1294,7 @@ async function pasteSelection() {
         if (failed) alert(`完成 ${data.copied || data.moved} 项，${failed} 项跳过（重名或位置非法）`);
         if (clipboard.mode === 'cut') clipboard = { mode: '', paths: [] };
         selectedPaths.clear();
+        renderFileList();
         updateClipboardButtons();
         loadFiles(currentPath);
     } catch (e) {

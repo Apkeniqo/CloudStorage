@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS files (
 CREATE INDEX IF NOT EXISTS idx_files_name    ON files(name);
 CREATE INDEX IF NOT EXISTS idx_files_created ON files(created_at);
 
+-- 被管理员隐藏的路径（文件或文件夹），仅管理员可见
+CREATE TABLE IF NOT EXISTS hidden (
+    path       TEXT PRIMARY KEY,
+    created_at REAL NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS shares (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     token         TEXT NOT NULL UNIQUE,
@@ -336,3 +342,31 @@ def get_blur(user_id):
     if not row:
         return 24, 0
     return row.get('blur_panel', 24), row.get('blur_bg', 0)
+
+
+# ---------------------------------------------------------------- 隐藏文件
+
+def set_hidden(path, hidden=True):
+    if hidden:
+        return _write("INSERT OR REPLACE INTO hidden (path, created_at) VALUES (?, ?)",
+                      (path, time.time()))
+    return _write("DELETE FROM hidden WHERE path = ?", (path,))
+
+
+def hidden_paths():
+    rows = _all("SELECT path FROM hidden")
+    return {r['path'] for r in rows}
+
+
+def rename_hidden(old, new):
+    """重命名/移动后同步隐藏记录（含子路径）"""
+    for p in list(hidden_paths()):
+        if p == old:
+            _write("DELETE FROM hidden WHERE path = ?", (p,))
+            _write("INSERT OR REPLACE INTO hidden (path, created_at) VALUES (?, ?)",
+                   (new, time.time()))
+        elif p.startswith(old + '/'):
+            tail = p[len(old):]
+            _write("DELETE FROM hidden WHERE path = ?", (p,))
+            _write("INSERT OR REPLACE INTO hidden (path, created_at) VALUES (?, ?)",
+                   (new + tail, time.time()))
