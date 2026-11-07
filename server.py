@@ -2056,6 +2056,117 @@ def delete_file():
                     'trash': trashed, 'is_dir': is_dir})
 
 
+# 复制 / 移动（剪切 + 粘贴）
+def _copy_entry(src, dest_dir, target_rel):
+    """复制单个文件或文件夹，返回写入后的相对路径"""
+    name = os.path.basename(src)
+    target = unique_path(dest_dir, name)
+    if os.path.isdir(src):
+        shutil.copytree(src, target)
+    else:
+        shutil.copy2(src, target)
+    return join_rel(target_rel, os.path.basename(target))
+
+
+@app.route('/files/copy', methods=['POST'])
+def files_copy():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    paths = data.get('paths') or []
+    target_rel = norm_rel(data.get('targetPath', ''))
+    if target_rel is None or not isinstance(paths, list) or not paths:
+        return jsonify({'status': 'error', 'message': '参数非法'}), 400
+
+    dest_dir = store_path(target_rel)
+    if dest_dir is None or not os.path.isdir(dest_dir):
+        return jsonify({'status': 'error', 'message': '目标目录不存在'}), 404
+
+    copied, failed = 0, 0
+    for raw in paths:
+        rel = norm_rel(raw)
+        if not rel:
+            failed += 1
+            continue
+        src = store_path(rel)
+        if src is None or not os.path.exists(src) or not can_manage_file(rel, user):
+            failed += 1
+            continue
+        try:
+            new_rel = _copy_entry(src, dest_dir, target_rel)
+            if not os.path.isdir(src):
+                try:
+                    db.add_file(name=new_rel, size=os.path.getsize(os.path.join(dest_dir, os.path.basename(new_rel))),
+                                sha256=None, uploader_id=user.get('id'),
+                                uploader_name=user.get('username'), method='copy')
+                except Exception as e:
+                    print(f"[数据库] 复制记录写入失败: {e}")
+            copied += 1
+        except OSError as e:
+            print(f"[复制] {rel} 失败: {e}")
+            failed += 1
+
+    audit('copy', f'{copied} items', f'-> {target_rel or "/"}')
+    broadcast_files()
+    return jsonify({'status': 'success', 'copied': copied, 'failed': failed,
+                    'message': f'已复制 {copied} 项'})
+
+
+@app.route('/files/move', methods=['POST'])
+def files_move():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    paths = data.get('paths') or []
+    target_rel = norm_rel(data.get('targetPath', ''))
+    if target_rel is None or not isinstance(paths, list) or not paths:
+        return jsonify({'status': 'error', 'message': '参数非法'}), 400
+
+    dest_dir = store_path(target_rel)
+    if dest_dir is None or not os.path.isdir(dest_dir):
+        return jsonify({'status': 'error', 'message': '目标目录不存在'}), 404
+
+    moved, failed = 0, 0
+    for raw in paths:
+        rel = norm_rel(raw)
+        if not rel or rel == target_rel:
+            failed += 1
+            continue
+        # 不能把文件夹移动到它自己或它的子目录里
+        if target_rel.startswith(rel + '/'):
+            failed += 1
+            continue
+        src = store_path(rel)
+        if src is None or not os.path.exists(src) or not can_manage_file(rel, user):
+            failed += 1
+            continue
+        if os.path.dirname(rel).replace('\\', '/') == target_rel:
+            failed += 1      # 已经在目标目录里
+            continue
+        try:
+            is_dir = os.path.isdir(src)
+            target = unique_path(dest_dir, os.path.basename(rel))
+            shutil.move(src, target)
+            new_rel = join_rel(target_rel, os.path.basename(target))
+            if is_dir:
+                db.rename_tree(rel, new_rel)
+            else:
+                db.rename_file(rel, new_rel)
+            moved += 1
+        except OSError as e:
+            print(f"[移动] {rel} 失败: {e}")
+            failed += 1
+
+    audit('move', f'{moved} items', f'-> {target_rel or "/"}')
+    broadcast_files()
+    return jsonify({'status': 'success', 'moved': moved, 'failed': failed,
+                    'message': f'已移动 {moved} 项'})
+
+
 # 重命名文件 / 文件夹
 @app.route('/files/rename', methods=['POST'])
 def rename_file():

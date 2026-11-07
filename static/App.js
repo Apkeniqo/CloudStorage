@@ -21,6 +21,7 @@ let currentPath = '';       // 当前所在目录（相对存储根）
 let currentBreadcrumb = [];
 let currentView_nav = 'files';
 const selectedPaths = new Set();     // 多选的文件（相对路径）
+let clipboard = { mode: '', paths: [] };  // 复制/剪切的待粘贴内容
 let searchQuery = '';
 let currentSort = localStorage.getItem('fluent_sort') || 'mtime-desc';
 let currentView = localStorage.getItem('fluent_view') || 'list';
@@ -526,13 +527,20 @@ function setViewMode(mode, save = true) {
     if (fileContainer) {
         fileContainer.className = `file-list-container view-${mode}`;
     }
-    
-    const btnList = document.getElementById('btn-view-list');
-    const btnGrid = document.getElementById('btn-view-grid');
-    if (btnList) btnList.classList.toggle('active', mode === 'list');
-    if (btnGrid) btnGrid.classList.toggle('active', mode === 'grid');
-    
+
+    // 单个切换按钮：显示「将要切换到的视图」的图标
+    const iconList = document.getElementById('view-icon-list');
+    const iconGrid = document.getElementById('view-icon-grid');
+    const toggle = document.getElementById('view-toggle');
+    if (iconList) iconList.style.display = mode === 'list' ? 'none' : 'inline-block';
+    if (iconGrid) iconGrid.style.display = mode === 'list' ? 'inline-block' : 'none';
+    if (toggle) toggle.title = mode === 'list' ? '切换到图标视图' : '切换到列表视图';
+
     renderFileList();
+}
+
+function toggleViewMode() {
+    setViewMode(currentView === 'list' ? 'grid' : 'list');
 }
 
 function getFileIconSvg(filename) {
@@ -893,6 +901,7 @@ function updateSelectionBar() {
     const num = document.getElementById('selection-num');
     const all = document.getElementById('select-all');
     if (num) num.textContent = String(selectedPaths.size);
+    updateClipboardButtons();
     if (bar) bar.classList.toggle('show', selectedPaths.size > 0);
 
     if (all) {
@@ -937,6 +946,62 @@ async function deleteSelected() {
     loadFiles(currentPath);
     if (ok < paths.length) {
         alert(`已删除 ${ok} 项，${paths.length - ok} 项失败`);
+    }
+}
+
+// ---------------- 复制 / 剪切 / 粘贴 ----------------
+function copySelection(mode) {
+    const paths = Array.from(selectedPaths);
+    if (!paths.length) {
+        alert('先在左侧勾选要' + (mode === 'cut' ? '剪切' : '复制') + '的文件');
+        return;
+    }
+    clipboard = { mode: mode, paths: paths };
+    updateClipboardButtons();
+    if (statusText) {
+        statusText.textContent = (mode === 'cut' ? '已剪切 ' : '已复制 ')
+            + paths.length + ' 项，进入目标文件夹后点「粘贴」';
+    }
+}
+
+function updateClipboardButtons() {
+    const copyBtn = document.getElementById('copy-btn');
+    const cutBtn = document.getElementById('cut-btn');
+    const pasteBtn = document.getElementById('paste-btn');
+    const hasSel = selectedPaths.size > 0;
+    const hasClip = clipboard.paths.length > 0;
+    if (copyBtn) copyBtn.disabled = !hasSel;
+    if (cutBtn) cutBtn.disabled = !hasSel;
+    if (pasteBtn) {
+        pasteBtn.disabled = !hasClip;
+        pasteBtn.title = hasClip
+            ? (clipboard.mode === 'cut' ? '粘贴（移动到这里）' : '粘贴（复制到这里）')
+            : '粘贴';
+    }
+}
+
+async function pasteSelection() {
+    if (!clipboard.paths.length) return;
+    const url = clipboard.mode === 'cut' ? '/files/move' : '/files/copy';
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths: clipboard.paths, targetPath: currentPath })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || '粘贴失败');
+            return;
+        }
+        const failed = data.failed || 0;
+        if (failed) alert(`完成 ${data.copied || data.moved} 项，${failed} 项跳过（重名或位置非法）`);
+        if (clipboard.mode === 'cut') clipboard = { mode: '', paths: [] };
+        selectedPaths.clear();
+        updateClipboardButtons();
+        loadFiles(currentPath);
+    } catch (e) {
+        alert('粘贴失败：' + e);
     }
 }
 

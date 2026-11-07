@@ -5,6 +5,9 @@ html {
 }
 
 :root {
+    /* Fluent 风格的选中白条 */
+    --side-active-bg: rgba(255, 255, 255, 0.95);
+    --side-active-fg: #1a1a1a;
     /* 日间模式 (Light Theme) */
     --accent-color: #0078d4;
     --accent-hover: #106ebe;
@@ -24,6 +27,8 @@ html {
 
 /* 夜间模式 (Dark Theme) */
 [data-theme="dark"] {
+    --side-active-bg: rgba(255, 255, 255, 0.14);
+    --side-active-fg: #ffffff;
     --accent-color: #4cc2ff;
     --accent-hover: #77d1ff;
     --bg-gradient: radial-gradient(at 0% 0%, rgba(76, 194, 255, 0.1) 0px, transparent 50%),
@@ -1022,7 +1027,7 @@ body.app-body {
 .side-nav {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 6px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
@@ -1032,7 +1037,7 @@ body.app-body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 9px 10px;
+    padding: 10px 14px;
     font-size: 13.5px;
     color: var(--text-main);
     text-decoration: none;
@@ -1056,8 +1061,10 @@ body.app-body {
 }
 
 .side-item.active {
-    background: var(--accent-color);
-    color: #fff;
+    background: var(--side-active-bg);
+    color: var(--side-active-fg);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.10);
 }
 
 .side-item.active svg {
@@ -1066,8 +1073,8 @@ body.app-body {
 
 /* 回收站视图下，侧边栏高亮由 body 类兜底，避免异步渲染时的时序问题 */
 body.trash-mode .side-item[data-nav="trash"] {
-    background: var(--accent-color);
-    color: #fff;
+    background: var(--side-active-bg);
+    color: var(--side-active-fg);
 }
 
 body.trash-mode .side-item[data-nav="trash"] svg {
@@ -1518,4 +1525,11 @@ body.trash-mode #file-input {
 
 .file-list-container.animate {
     animation: viewFade 0.22s ease;
+}
+
+/* 工具栏禁用态（没有选中/剪贴板为空时） */
+.btn-icon:disabled {
+    opacity: 0.35;
+    cursor: default;
+    pointer-events: none;
 }
