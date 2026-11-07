@@ -17,6 +17,9 @@ const STALL_TIMEOUT_MS = 15000;
 
 // 核心状态管理
 let rawFilesData = [];
+let currentPath = '';       // 当前所在目录（相对存储根）
+let currentBreadcrumb = [];
+let currentView_nav = 'files';
 let searchQuery = '';
 let currentSort = localStorage.getItem('fluent_sort') || 'mtime-desc';
 let currentView = localStorage.getItem('fluent_view') || 'list';
@@ -47,23 +50,61 @@ function initApp() {
         itemsWrapper.addEventListener('click', (e) => {
             const target = e.target;
             if (!target || !target.closest) return;
+            const folder = target.closest('.folder-name');
+            if (folder) {
+                e.preventDefault();
+                navigateTo(folder.dataset.path);
+                return;
+            }
             const del = target.closest('.delete-btn');
             if (del) {
                 e.preventDefault();
-                deleteFile(del.dataset.name);
+                deleteFile(del.dataset.path, del.dataset.dir === '1');
                 return;
             }
             const ren = target.closest('.rename-btn');
             if (ren) {
                 e.preventDefault();
-                renameFile(ren.dataset.name);
+                renameFile(ren.dataset.path, ren.dataset.dir === '1');
                 return;
             }
             const share = target.closest('.share-btn');
             if (share) {
                 e.preventDefault();
-                shareFile(share.dataset.name);
+                shareFile(share.dataset.path);
             }
+        });
+    }
+
+    // 共享弹窗里的复制/撤销
+    const sharesBox = document.getElementById('shares-list');
+    if (sharesBox) {
+        sharesBox.addEventListener('click', (e) => {
+            if (!e.target || !e.target.closest) return;
+            const copy = e.target.closest('[data-copy]');
+            if (copy) {
+                const url = copy.dataset.copy;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(
+                        () => alert('链接已复制：\n' + url),
+                        () => prompt('复制这个链接：', url)
+                    );
+                } else {
+                    prompt('复制这个链接：', url);
+                }
+                return;
+            }
+            const revoke = e.target.closest('[data-revoke]');
+            if (revoke) revokeShare(revoke.dataset.revoke);
+        });
+    }
+
+    // 面包屑点击
+    const crumbs = document.getElementById('breadcrumb');
+    if (crumbs) {
+        crumbs.addEventListener('click', (e) => {
+            const c = e.target.closest('.crumb');
+            if (c && !c.classList.contains('current')) navigateTo(c.dataset.path || '');
         });
     }
 
@@ -145,9 +186,194 @@ function toggleTheme() {
 }
 
 function requestFileList() {
-    if (socket && socket.connected) {
-        socket.emit('get_files');
+    loadFiles(currentPath);
+}
+
+// 拉取某个目录的内容
+async function loadFiles(path, opts) {
+    opts = opts || {};
+    try {
+        const url = path === null || path === undefined
+            ? '/api/recent'
+            : '/api/list?path=' + encodeURIComponent(path);
+        const res = await fetch(url, { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            if (res.status === 404 && path) {
+                currentPath = '';
+                return loadFiles('');
+            }
+            if (statusText) statusText.textContent = data.message || '加载失败';
+            return;
+        }
+
+        if (path === null) {
+            currentPath = '';
+            currentBreadcrumb = [{ name: '最近', path: '' }];
+            currentView_nav = 'recent';
+        } else {
+            currentPath = data.path || '';
+            currentBreadcrumb = data.breadcrumb || [];
+            currentView_nav = 'files';
+        }
+
+        rawFilesData = data.items || [];
+        if (!opts.keepSearch) {
+            searchQuery = '';
+            const s = document.getElementById('search-input');
+            if (s) s.value = '';
+        }
+        renderBreadcrumb();
+        renderFileList();
+        updateActiveNav();
+    } catch (e) {
+        if (statusText) statusText.textContent = '加载失败：' + e;
     }
+}
+
+function navigateTo(path) {
+    loadFiles(path || '');
+}
+
+function renderBreadcrumb() {
+    const el = document.getElementById('breadcrumb');
+    if (!el) return;
+    const crumbs = currentBreadcrumb.length ? currentBreadcrumb : [{ name: '我的文件', path: '' }];
+    el.innerHTML = crumbs.map((c, i) => {
+        const sep = i ? '<span class="crumb-sep">/</span>' : '';
+        const cls = i === crumbs.length - 1 ? 'crumb current' : 'crumb';
+        return sep + '<span class="' + cls + '" data-path="' + escapeHtml(c.path) + '">'
+            + escapeHtml(c.name) + '</span>';
+    }).join('');
+}
+
+function updateActiveNav() {
+    document.querySelectorAll('.side-item[data-nav]').forEach(el => {
+        el.classList.toggle('active', el.dataset.nav === currentView_nav);
+    });
+}
+
+function navTo(view) {
+    if (view === 'files') {
+        return loadFiles('');
+    }
+    if (view === 'recent') {
+        return loadFiles(null);
+    }
+    if (view === 'trash') {
+        location.href = '/trash';
+    }
+}
+
+function toggleSidebar() {
+    const el = document.getElementById('sidebar');
+    if (el) el.classList.toggle('open');
+}
+
+// 新建文件夹
+async function createFolder() {
+    if (isGuest) {
+        alert('访客只能浏览和下载文件');
+        return;
+    }
+    const name = prompt('新建文件夹，输入名称：', '新建文件夹');
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    try {
+        const res = await fetch('/folders/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: currentPath, name: trimmed })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            alert(data.message || ('创建失败（' + res.status + '）'));
+            return;
+        }
+        loadFiles(currentPath);
+    } catch (e) {
+        alert('创建失败：' + e);
+    }
+}
+
+// 共享链接弹窗
+function openShares() {
+    const modal = document.getElementById('shares-modal');
+    if (modal) modal.classList.add('show');
+    loadShares();
+}
+
+function closeShares() {
+    const modal = document.getElementById('shares-modal');
+    if (modal) modal.classList.remove('show');
+}
+
+async function loadShares() {
+    const box = document.getElementById('shares-list');
+    if (!box) return;
+    box.textContent = '加载中…';
+    try {
+        const res = await fetch('/api/shares', { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        const items = data.items || [];
+        if (!items.length) {
+            box.innerHTML = '<div class="empty-state">还没有共享链接</div>';
+            return;
+        }
+        box.innerHTML = items.map(s => {
+            const state = s.active ? '有效' : (s.reason === 'expired' ? '已过期' : '次数用尽');
+            const url = location.origin + s.url;
+            return '<div class="share-row">'
+                + '<div class="share-name" title="' + escapeHtml(s.name) + '">' + escapeHtml(s.name) + '</div>'
+                + '<div class="share-ops">'
+                + '<button data-copy="' + escapeHtml(url) + '">复制</button>'
+                + '<button data-revoke="' + escapeHtml(s.token) + '">撤销</button>'
+                + '</div>'
+                + '<div class="share-meta">' + state + ' · 已下载 ' + s.downloads
+                + (s.max_downloads ? ' / ' + s.max_downloads : '') + ' 次</div>'
+                + '</div>';
+        }).join('');
+    } catch (e) {
+        box.textContent = '加载失败：' + e;
+    }
+}
+
+async function revokeShare(token) {
+    try {
+        await fetch('/api/shares/revoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token })
+        });
+        loadShares();
+    } catch (e) {
+        alert('撤销失败：' + e);
+    }
+}
+
+// 侧边栏的存储用量
+async function updateStorageInfo() {
+    try {
+        const res = await fetch('/api/version', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const used = data.storage_used || 0;
+        const limit = data.storage_limit || 0;
+        const fill = document.getElementById('storage-fill');
+        const text = document.getElementById('storage-text');
+        if (fill && limit > 0) {
+            fill.style.width = Math.min(100, (used / limit) * 100).toFixed(1) + '%';
+        } else if (fill) {
+            fill.style.width = '0%';
+        }
+        if (text) {
+            text.textContent = limit > 0
+                ? '已用 ' + formatSize(used) + ' / ' + formatSize(limit)
+                : '已用 ' + formatSize(used) + ' · 不限容量';
+        }
+    } catch (e) { /* 用量展示失败不影响主流程 */ }
 }
 
 function setViewMode(mode, save = true) {
@@ -233,11 +459,14 @@ function getSortedFiles() {
     const [field, order] = currentSort.split('-');
 
     return files.sort((a, b) => {
+        // 文件夹永远排在文件前面
+        if (!!a.is_dir !== !!b.is_dir) return a.is_dir ? -1 : 1;
+
         let res = 0;
         if (field === 'name') {
             res = a.name.localeCompare(b.name, 'zh-CN', { sensitivity: 'base' });
         } else if (field === 'size') {
-            res = a.size - b.size;
+            res = (a.size || 0) - (b.size || 0);
         } else if (field === 'mtime') {
             res = a.mtime - b.mtime;
         }
@@ -251,6 +480,7 @@ socket.on('connect', () => {
         ? `已连接（实时同步）· ${currentUsername}`
         : "已连接（实时同步）";
     requestFileList();
+    updateStorageInfo();
 });
 
 socket.on('disconnect', () => {
@@ -271,9 +501,10 @@ socket.on('connect_error', async () => {
     if (statusText) statusText.textContent = "实时连接失败，正在重试...";
 });
 
-socket.on('file_update', (files) => {
-    rawFilesData = files || [];
-    renderFileList();
+socket.on('file_update', () => {
+    // 服务端只发一个"有变化"的信号，具体内容按当前目录重新拉取
+    loadFiles(currentView_nav === 'recent' ? null : currentPath, { keepSearch: true });
+    updateStorageInfo();
 });
 
 function formatSize(bytes) {
@@ -379,27 +610,40 @@ const shareIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="curr
 const renameIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
 const deleteIconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
+const folderIconSvg = `<svg class="folder-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+
 function fileItemHtml(file) {
-    const downloadUrl = `/download/${encodeURIComponent(file.name)}`;
+    const itemPath = file.path || file.name;
     const safeName = escapeHtml(file.name);
-    return `
-        <div class="file-item">
-            <div class="file-name" title="${safeName}">
+    const safePath = escapeHtml(itemPath);
+    const isDir = !!file.is_dir;
+    const downloadUrl = isDir ? '' : '/download/' + encodeURIComponent(itemPath);
+
+    const nameCell = isDir
+        ? `<div class="file-name folder" title="${safeName}">
+                ${folderIconSvg}
+                <a href="javascript:void(0)" class="file-name-link folder-name" data-path="${safePath}">${safeName}</a>
+           </div>`
+        : `<div class="file-name" title="${safeName}">
                 ${getFileIconSvg(file.name)}
-                <a href="${downloadUrl}" download="${safeName}" class="file-name-link">
-                    ${safeName}
-                </a>
-            </div>
-            <div class="file-size">${formatSize(file.size)}</div>
+                <a href="${downloadUrl}" download="${safeName}" class="file-name-link">${safeName}</a>
+           </div>`;
+
+    const actions = isGuest ? (isDir ? '' : `<a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">${downloadIconSvg}</a>`)
+        : (isDir
+            ? `<button class="action-btn rename-btn" data-path="${safePath}" data-dir="1" title="重命名">${renameIconSvg}</button>
+               <button class="action-btn delete-btn" data-path="${safePath}" data-dir="1" title="删除">${deleteIconSvg}</button>`
+            : `<a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">${downloadIconSvg}</a>
+               <button class="action-btn share-btn" data-path="${safePath}" title="分享">${shareIconSvg}</button>
+               <button class="action-btn rename-btn" data-path="${safePath}" title="重命名">${renameIconSvg}</button>
+               <button class="action-btn delete-btn" data-path="${safePath}" title="删除">${deleteIconSvg}</button>`);
+
+    return `
+        <div class="file-item${isDir ? ' is-dir' : ''}">
+            ${nameCell}
+            <div class="file-size">${isDir ? '—' : formatSize(file.size)}</div>
             <div class="file-time" title="${file.uploader ? '上传者：' + escapeHtml(file.uploader) : ''}">${formatTime(file.mtime)}</div>
-            <div class="file-action">
-                <a href="${downloadUrl}" download="${safeName}" class="action-btn download-btn" title="下载">
-                    ${downloadIconSvg}
-                </a>
-                ${isGuest ? '' : `<button class="action-btn share-btn" data-name="${safeName}" title="分享">${shareIconSvg}</button>
-                <button class="action-btn rename-btn" data-name="${safeName}" title="重命名">${renameIconSvg}</button>
-                <button class="action-btn delete-btn" data-name="${safeName}" title="删除">${deleteIconSvg}</button>`}
-            </div>
+            <div class="file-action">${actions}</div>
         </div>
     `;
 }
@@ -446,7 +690,9 @@ function renderFileList() {
     itemsWrapper.innerHTML = '';
 
     if (files.length === 0) {
-        const emptyMsg = searchQuery ? '未找到匹配的文件' : '暂无文件，点击上方上传';
+        const emptyMsg = searchQuery
+            ? '未找到匹配的文件'
+            : (isGuest ? '这个文件夹是空的' : '这个文件夹是空的，点击上传或拖入文件');
         itemsWrapper.innerHTML = `<div class="empty-state">${emptyMsg}</div>`;
         if (fileCount) fileCount.textContent = '0 项';
         return;
@@ -456,8 +702,9 @@ function renderFileList() {
 }
 
 // 生成分享链接
-async function shareFile(name) {
-    if (!name) return;
+async function shareFile(path) {
+    if (!path) return;
+    const name = path.split('/').pop();
     const hours = prompt(`生成「${name}」的分享链接\n有效期（小时，0 = 永久）：`, '24');
     if (hours === null) return;
     const maxDownloads = prompt('可下载次数（0 = 不限）：', '0');
@@ -467,7 +714,7 @@ async function shareFile(name) {
         const res = await fetch('/api/shares', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, expire_hours: hours, max_downloads: maxDownloads })
+            body: JSON.stringify({ name: path, expire_hours: hours, max_downloads: maxDownloads })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { alert(data.message || `生成失败（${res.status}）`); return; }
@@ -540,8 +787,9 @@ async function chunkCrc32(blob) {
 }
 
 // 重命名文件
-async function renameFile(name) {
-    if (!name) return;
+async function renameFile(itemPath, isDir) {
+    if (!itemPath) return;
+    const name = itemPath.split('/').pop();
     const input = prompt(`把「${name}」重命名为：`, name);
     if (input === null) return;
     const newName = input.trim();
@@ -551,28 +799,37 @@ async function renameFile(name) {
         const res = await fetch('/files/rename', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, newName })
+            body: JSON.stringify({ path: itemPath, newName: newName })
         });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) alert(data.message || `重命名失败（${res.status}）`);
+        if (!res.ok) {
+            alert(data.message || `重命名失败（${res.status}）`);
+        } else {
+            loadFiles(currentPath);
+        }
     } catch (e) {
         alert('重命名失败：' + e);
     }
 }
 
-// 删除文件（移到回收站）
-async function deleteFile(name) {
-    if (!name) return;
-    if (!confirm(`确定删除「${name}」？\n文件会移到回收站，之后可以恢复。`)) return;
+// 删除文件 / 文件夹（移到回收站）
+async function deleteFile(itemPath, isDir) {
+    if (!itemPath) return;
+    const name = itemPath.split('/').pop();
+    const what = isDir ? '文件夹及其全部内容' : '文件';
+    if (!confirm(`确定删除${what}「${name}」？\n会移到回收站，之后可以恢复。`)) return;
+
     try {
         const res = await fetch('/files/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ path: itemPath })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
             alert(data.message || `删除失败（${res.status}）`);
+        } else {
+            loadFiles(currentPath);
         }
     } catch (e) {
         alert('删除失败：' + e);
@@ -778,6 +1035,7 @@ function uploadSingleFileStream(file, taskId) {
         const xhr = new XMLHttpRequest();
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('path', currentPath || '');
 
         // 注册到全局任务，支持单项取消
         uploadTasks.set(taskId, {
@@ -1034,7 +1292,8 @@ async function uploadLargeFileChunks(file, taskId) {
             const mergeRes = await fetch('/upload/merge', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileHash, fileName: file.name, totalChunks })
+                body: JSON.stringify({ fileHash, fileName: file.name, totalChunks,
+                                       targetPath: currentPath || '' })
             });
 
             if (mergeRes.status === 202 || mergeRes.ok) {

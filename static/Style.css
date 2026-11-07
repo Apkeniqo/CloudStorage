@@ -836,6 +836,8 @@ body {
     }
 }
 /* 访客（只读）：隐藏上传入口 */
+.guest-mode .side-upload,
+.guest-mode #new-folder-btn,
 .guest-mode .upload-btn-label,
 .guest-mode #file-input {
     display: none !important;
@@ -885,4 +887,366 @@ body {
 .drop-sub {
     font-size: 12.5px;
     color: var(--text-secondary);
+}
+/* ================= 侧边栏布局（模仿 OneDrive 网页版） ================= */
+body {
+    display: block;
+    padding: 16px;
+}
+
+.app-shell {
+    display: flex;
+    width: 100%;
+    max-width: 1400px;
+    height: calc(100vh - 32px);
+    margin: 0 auto;
+    background: var(--card-bg);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid var(--card-border);
+    border-radius: calc(var(--radius) * 1.5);
+    box-shadow: var(--container-shadow, 0 16px 40px rgba(0, 0, 0, 0.14));
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 216px;
+    flex: 0 0 216px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 16px 10px;
+    border-right: 1px solid var(--card-border);
+    background: var(--hover-bg);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 8px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.side-upload {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0 4px 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent-color);
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.side-upload:hover {
+    background: var(--accent-hover);
+}
+
+.side-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.side-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    font-size: 13.5px;
+    color: var(--text-main);
+    text-decoration: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.side-item svg {
+    flex: 0 0 auto;
+    opacity: 0.75;
+}
+
+.side-item:hover {
+    background: var(--card-bg);
+}
+
+.side-item.active {
+    background: var(--accent-color);
+    color: #fff;
+}
+
+.side-item.active svg {
+    opacity: 1;
+}
+
+.side-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--card-border);
+}
+
+.side-storage {
+    padding: 6px 10px 2px;
+}
+
+.side-storage-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: var(--card-border);
+    overflow: hidden;
+}
+
+.side-storage-bar i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--accent-color);
+    transition: width 0.3s ease;
+}
+
+.side-storage-text {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.main-pane {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+}
+
+.main-pane .container {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.sidebar-toggle {
+    display: none;
+}
+
+/* 面包屑 */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.crumb {
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 220px;
+}
+
+.crumb:hover {
+    background: var(--hover-bg);
+    color: var(--text-main);
+}
+
+.crumb.current {
+    color: var(--text-main);
+    font-weight: 600;
+    cursor: default;
+}
+
+.crumb-sep {
+    color: var(--text-secondary);
+    opacity: 0.6;
+    padding: 0 2px;
+}
+
+/* 文件夹行 */
+.folder-icon {
+    color: #f2b01e;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.file-name.folder {
+    cursor: pointer;
+}
+
+.file-name.folder .folder-name {
+    color: var(--text-main);
+    text-decoration: none;
+}
+
+.file-name.folder:hover .folder-name {
+    color: var(--accent-color);
+}
+
+/* 共享链接弹窗 */
+.modal-mask {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.modal-mask.show {
+    display: flex;
+}
+
+.modal-card {
+    width: min(560px, 92vw);
+    max-height: 76vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: calc(var(--radius) * 1.4);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+.modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 15px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius);
+}
+
+.modal-close:hover {
+    background: var(--hover-bg);
+    color: var(--text-main);
+}
+
+.modal-body {
+    padding: 12px 18px 18px;
+    overflow-y: auto;
+    font-size: 13px;
+}
+
+.share-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--card-border);
+}
+
+.share-row:last-child {
+    border-bottom: none;
+}
+
+.share-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.share-meta {
+    grid-column: 1;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.share-ops {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.share-ops button {
+    padding: 5px 10px;
+    font-size: 12px;
+    background: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+
+.share-ops button:hover {
+    background: var(--hover-bg);
+}
+
+/* 窄屏：侧边栏收成抽屉 */
+@media (max-width: 900px) {
+    body {
+        padding: 0;
+    }
+
+    .app-shell {
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 1100;
+        width: 232px;
+        flex-basis: 232px;
+        transform: translateX(-100%);
+        transition: transform 0.22s ease;
+        box-shadow: 12px 0 32px rgba(0, 0, 0, 0.18);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-toggle {
+        display: inline-flex;
+    }
+
+    .main-pane .container {
+        height: 100%;
+    }
 }

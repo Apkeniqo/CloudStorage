@@ -463,13 +463,80 @@ def file_sha256(path):
             h.update(block)
     return h.hexdigest()
 
-def move_to_trash(src_path, name):
-    """把文件移进回收站，返回回收站里的路径（带时间前缀，避免重名）"""
-    os.makedirs(TRASH_DIR, exist_ok=True)
+def norm_rel(raw):
+    """把前端传来的相对路径规范化。
+
+    返回 '' 表示存储根；返回 None 表示非法（绝对路径、上跳、隐藏目录、非法字符）。
+    """
+    raw = (raw or '').replace('\\', '/').strip()
+    if raw in ('', '.', '/'):
+        return ''
+    if raw.startswith('/') or (len(raw) > 1 and raw[1] == ':'):
+        return None
+
+    parts = []
+    for part in raw.split('/'):
+        if part in ('', '.'):
+            continue
+        if part == '..' or part.startswith('.'):
+            return None
+        if any(ch in part for ch in '<>:"|?*'):
+            return None
+        parts.append(part)
+    return '/'.join(parts)
+
+
+def store_path(rel):
+    """相对路径 -> 存储根内的绝对路径；越界返回 None"""
+    if rel == '':
+        return app.config['UPLOAD_FOLDER']
+    return safe_join(app.config['UPLOAD_FOLDER'], *rel.split('/'))
+
+
+def join_rel(*parts):
+    return '/'.join(p for p in parts if p)
+
+
+def valid_entry_name(name):
+    """文件夹/文件名校验：不能带分隔符、不能是 . / .."""
+    name = (name or '').strip()
+    if not name or name in ('.', '..'):
+        return None
+    if any(ch in name for ch in '\\/:*?"<>|'):
+        return None
+    if len(name) > 120:
+        return None
+    return name
+
+
+def broadcast_files():
+    """通知所有客户端刷新列表（不再把整份列表塞进事件里）"""
+    try:
+        socketio.emit('file_update', {'refresh': True})
+    except Exception as e:
+        print(f"[推送] 广播失败: {e}")
+
+
+def move_to_trash(src_path, rel_name):
+    """把文件/文件夹移进回收站，保留相对目录结构。
+
+    返回回收站内的相对路径（例如 docs/20261108-010203_a.txt）。
+    """
+    rel = norm_rel(rel_name)
+    if rel is None or rel == '':
+        raise ValueError('路径非法')
+
+    parent_rel, base = os.path.split(rel)
+    parent_rel = parent_rel.replace('\\', '/')
+    dest_dir = safe_join(TRASH_DIR, *(parent_rel.split('/') if parent_rel else []))
+    if dest_dir is None:
+        raise ValueError('回收站路径非法')
+
+    os.makedirs(dest_dir, exist_ok=True)
     stamp = time.strftime('%Y%m%d-%H%M%S')
-    target = unique_path(TRASH_DIR, f'{stamp}_{name}')
+    target = unique_path(dest_dir, f'{stamp}_{base}')
     shutil.move(src_path, target)
-    return target
+    return os.path.relpath(target, TRASH_DIR).replace('\\', '/')
 
 
 def unique_path(directory, filename):
@@ -539,12 +606,16 @@ socketio = SocketIO(
     max_http_buffer_size=1024 * 1024 * 1024
     )
 
-def get_file_list():
-    """高效获取文件列表（以磁盘为准，叠加数据库里的上传者/上传时间）"""
-    file_list = []
-    base_path = app.config['UPLOAD_FOLDER']
-    if not os.path.exists(base_path): 
-        os.makedirs(base_path, exist_ok=True)
+def get_file_list(path=''):
+    """列出某个目录下的文件夹与文件。
+
+    path 是相对存储根的路径（'' 表示根目录）。文件夹永远可见，
+    文件在开启文件隔离时按上传者过滤。
+    """
+    path = path or ''
+    base = store_path(path)
+    if base is None or not os.path.isdir(base):
+        return []
 
     try:
         records = db.latest_file_records()
@@ -552,37 +623,49 @@ def get_file_list():
         print(f"[数据库] 读取文件记录失败: {e}")
         records = {}
 
+    user = current_user() if has_request_context() else None
+    isolated = bool(ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'))
+    uid = user.get('id') if user else None
+
+    items = []
     try:
-        with os.scandir(base_path) as it:
+        with os.scandir(base) as it:
             for entry in it:
                 try:
-                    if entry.is_file():
-                        stat = entry.stat()
-                        item = {
+                    if entry.name.startswith('.'):
+                        continue
+                    stat = entry.stat()
+                    rel = join_rel(path, entry.name)
+                    if entry.is_dir():
+                        items.append({
                             'name': entry.name,
+                            'path': rel,
+                            'is_dir': True,
+                            'size': 0,
+                            'mtime': stat.st_mtime,
+                        })
+                    elif entry.is_file():
+                        rec = records.get(rel) or {}
+                        if isolated and rec.get('uploader_id') != uid:
+                            continue
+                        items.append({
+                            'name': entry.name,
+                            'path': rel,
+                            'is_dir': False,
                             'size': stat.st_size,
-                            'mtime': stat.st_mtime
-                        }
-                        rec = records.get(entry.name)
-                        if rec:
-                            item['uploader'] = rec.get('uploader_name')
-                            item['uploaded_at'] = rec.get('created_at')
-                            item['sha256'] = rec.get('sha256')
-                        file_list.append(item)
+                            'mtime': stat.st_mtime,
+                            'uploader': rec.get('uploader_name'),
+                            'uploaded_at': rec.get('created_at'),
+                            'sha256': rec.get('sha256'),
+                        })
                 except OSError:
                     continue
-
     except Exception as e:
         print(f"读取文件错误: {e}")
 
-    # 后台线程（合并、watchdog）里没有请求上下文，current_user() 会抛异常
-    user = current_user() if has_request_context() else None
-    if ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'):
-        uid = user.get('id')
-        file_list = [f for f in file_list
-                     if (records.get(f['name']) or {}).get('uploader_id') == uid]
-
-    return sorted(file_list, key=lambda x: x['mtime'], reverse=True)
+    # 文件夹在前，其余按修改时间倒序
+    items.sort(key=lambda x: (not x['is_dir'], -x['mtime']))
+    return items
 
 
 def can_manage_file(name, user=None):
@@ -599,14 +682,13 @@ def can_manage_file(name, user=None):
 
 
 def storage_usage():
-    """存储目录当前占用（字节）"""
+    """存储目录当前占用（字节），包含所有子目录"""
     total = 0
     try:
-        with os.scandir(app.config['UPLOAD_FOLDER']) as it:
-            for entry in it:
+        for dirpath, dirnames, filenames in os.walk(app.config['UPLOAD_FOLDER']):
+            for name in filenames:
                 try:
-                    if entry.is_file():
-                        total += entry.stat().st_size
+                    total += os.path.getsize(os.path.join(dirpath, name))
                 except OSError:
                     continue
     except OSError:
@@ -630,7 +712,7 @@ def quota_error(extra_bytes):
 
 
 def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk_dir,
-                        uploader_id=None, uploader_name=None):
+                        uploader_id=None, uploader_name=None, target_rel=''):
     """后台线程：执行大文件合并，不阻塞主服务"""
     target_path = None
     tmp_target_path = None
@@ -650,6 +732,7 @@ def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk
         # 同名文件自动改名，绝不覆盖已有文件
         target_path = unique_path(target_dir, raw_filename)
         final_name = os.path.basename(target_path)
+        final_rel = join_rel(target_rel, final_name)
         merge_tasks[file_hash]['name'] = final_name
         tmp_target_path = target_path + '.part'
 
@@ -685,14 +768,14 @@ def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk
         # 写入文件记录（数据库只是记录，列表仍以磁盘为准）
         digest = hasher.hexdigest()
         try:
-            db.add_file(name=final_name, size=os.path.getsize(target_path), sha256=digest,
+            db.add_file(name=final_rel, size=os.path.getsize(target_path), sha256=digest,
                         uploader_id=uploader_id, uploader_name=uploader_name,
                         method='chunked')
         except Exception as e:
             print(f"[数据库] 写入文件记录失败（合并结果不受影响）: {e}")
 
         try:
-            db.add_event('upload', uploader_name or 'anonymous', final_name,
+            db.add_event('upload', uploader_name or 'anonymous', final_rel,
                          f'{os.path.getsize(target_path)} bytes (chunked)')
         except Exception:
             pass
@@ -703,8 +786,7 @@ def async_merge_process(file_hash, raw_filename, total_chunks, target_dir, chunk
         }
 
         # 只广播一次
-        with app.app_context():
-            socketio.emit('file_update', get_file_list())
+        broadcast_files()
 
     except Exception as e:
         print(f"后台合并异常: {e}")
@@ -732,7 +814,7 @@ class FileChangeHandler(FileSystemEventHandler):
         
     def push_update(self):
         with app.app_context():
-            socketio.emit('file_update', get_file_list(), namespace='/')
+            broadcast_files()
 
 def auto_cleanup_stale_chunks():
     """后台定时线程：清理超时废弃切片以及内存中的过期合并任务记录"""
@@ -1408,13 +1490,13 @@ def on_connect():
     # 未登录直接拒绝握手
     if AUTH_ENABLED and not current_user():
         return False
-    emit('file_update', get_file_list())
+    emit('file_update', {'refresh': True})
 
 @socketio.on('get_files')
 def handle_get_files():
     if AUTH_ENABLED and not current_user():
         return
-    emit('file_update', get_file_list())
+    emit('file_update', {'refresh': True})
 
 # --- HTTP 路由服务 ---
 @app.route('/')
@@ -1552,7 +1634,14 @@ def merge_chunks():
         if not is_safe_hash(file_hash):
             return jsonify({'status': 'error', 'message': 'fileHash 非法'}), 400
 
-        raw_filename = clean_filename(file_name) or f"file_{int(time.time())}"
+        raw_filename = valid_entry_name(clean_filename(file_name)) or f"file_{int(time.time())}"
+
+        target_rel = norm_rel(data.get('targetPath', ''))
+        if target_rel is None:
+            return jsonify({'status': 'error', 'message': '目标目录非法'}), 400
+        target_dir = store_path(target_rel)
+        if target_dir is None or not os.path.isdir(target_dir):
+            return jsonify({'status': 'error', 'message': '目标目录不存在'}), 404
 
         if total_chunks <= 0 or total_chunks > MAX_TOTAL_CHUNKS:
             return jsonify({'status': 'error', 'message': 'totalChunks 超出范围'}), 400
@@ -1590,8 +1679,9 @@ def merge_chunks():
         user = current_user() or {}
         t = threading.Thread(
             target=async_merge_process,
-            args=(file_hash, raw_filename, total_chunks, app.config['UPLOAD_FOLDER'], chunk_dir),
-            kwargs={'uploader_id': user.get('id'), 'uploader_name': user.get('username')},
+            args=(file_hash, raw_filename, total_chunks, target_dir, chunk_dir),
+            kwargs={'uploader_id': user.get('id'), 'uploader_name': user.get('username'),
+                    'target_rel': target_rel},
         )
         t.daemon = True
         t.start()
@@ -1625,14 +1715,19 @@ def upload_file():
             return jsonify({'status': 'error', 'message': quota['message']}), 413
 
         if file:
-            raw_filename = clean_filename(file.filename) or f"file_{int(time.time())}"
+            raw_filename = valid_entry_name(clean_filename(file.filename)) or f"file_{int(time.time())}"
+            rel_dir = norm_rel(request.form.get('path', ''))
+            dest_dir = store_path(rel_dir) if rel_dir is not None else None
+            if dest_dir is None or not os.path.isdir(dest_dir):
+                return jsonify({'status': 'error', 'message': '目标目录非法'}), 400
             # 同名文件自动加 (1) 后缀，不再静默覆盖
-            file_path = unique_path(app.config['UPLOAD_FOLDER'], raw_filename)
+            file_path = unique_path(dest_dir, raw_filename)
             file.save(file_path)
+            file_rel = join_rel(rel_dir, os.path.basename(file_path))
 
             user = current_user() or {}
             try:
-                db.add_file(name=os.path.basename(file_path),
+                db.add_file(name=file_rel,
                             size=os.path.getsize(file_path),
                             sha256=file_sha256(file_path),
                             uploader_id=user.get('id'),
@@ -1641,11 +1736,10 @@ def upload_file():
             except Exception as e:
                 print(f"[数据库] 写入文件记录失败（上传结果不受影响）: {e}")
 
-            with app.app_context():
-                socketio.emit('file_update', get_file_list())
-            audit('upload', os.path.basename(file_path), f'{os.path.getsize(file_path)} bytes')
+            broadcast_files()
+            audit('upload', file_rel, f'{os.path.getsize(file_path)} bytes')
             return jsonify({'status': 'success', 'message': '文件上传成功',
-                            'name': os.path.basename(file_path)})
+                            'name': os.path.basename(file_path), 'path': file_rel})
     except HTTPException:
         raise
     except Exception as e:
@@ -1698,10 +1792,116 @@ def api_version():
         'version': version.VERSION,
         'python': sys.version.split()[0],
         'uptime': int(time.time() - START_TIME),
+        'storage_used': storage_usage(),
+        'storage_limit': MAX_STORAGE_MB * 1024 * 1024 if MAX_STORAGE_MB > 0 else 0,
     })
 
 
 # 文件下载路由
+@app.route('/api/list')
+def api_list():
+    """按目录返回文件列表 + 面包屑"""
+    rel = norm_rel(request.args.get('path', ''))
+    if rel is None:
+        return jsonify({'status': 'error', 'message': '路径非法'}), 400
+
+    base = store_path(rel)
+    if base is None or not os.path.isdir(base):
+        return jsonify({'status': 'error', 'message': '目录不存在'}), 404
+
+    crumbs = [{'name': '我的文件', 'path': ''}]
+    acc = ''
+    for part in (rel.split('/') if rel else []):
+        acc = join_rel(acc, part)
+        crumbs.append({'name': part, 'path': acc})
+
+    return jsonify({'status': 'success', 'path': rel,
+                    'breadcrumb': crumbs, 'items': get_file_list(rel)})
+
+
+@app.route('/api/recent')
+def api_recent():
+    """最近修改的文件（跨目录，最多 200 条）"""
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    root = app.config['UPLOAD_FOLDER']
+    try:
+        records = db.latest_file_records()
+    except Exception:
+        records = {}
+
+    isolated = bool(ISOLATE_FILES and user.get('role') not in ('admin', 'guest'))
+    uid = user.get('id')
+
+    items = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        depth = os.path.relpath(dirpath, root).count(os.sep) if dirpath != root else 0
+        if depth >= 6:
+            dirnames[:] = []
+        else:
+            dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+
+        for fname in filenames:
+            if fname.startswith('.'):
+                continue
+            full = os.path.join(dirpath, fname)
+            rel = os.path.relpath(full, root).replace('\\', '/')
+            rec = records.get(rel) or {}
+            if isolated and rec.get('uploader_id') != uid:
+                continue
+            try:
+                st = os.stat(full)
+            except OSError:
+                continue
+            items.append({
+                'name': fname,
+                'path': rel,
+                'is_dir': False,
+                'size': st.st_size,
+                'mtime': st.st_mtime,
+                'uploader': rec.get('uploader_name'),
+                'uploaded_at': rec.get('created_at'),
+            })
+
+    items.sort(key=lambda x: x['mtime'], reverse=True)
+    return jsonify({'status': 'success', 'path': '',
+                    'breadcrumb': [{'name': '最近', 'path': ''}],
+                    'items': items[:200]})
+
+
+@app.route('/folders/create', methods=['POST'])
+def folder_create():
+    user = current_user()
+    if not user:
+        return jsonify({'status': 'error', 'message': '未登录'}), 401
+
+    data = request.get_json(silent=True) or {}
+    rel = norm_rel(data.get('path', ''))
+    name = valid_entry_name(data.get('name'))
+    if rel is None or not name:
+        return jsonify({'status': 'error', 'message': '名称或路径非法'}), 400
+
+    parent = store_path(rel)
+    if parent is None or not os.path.isdir(parent):
+        return jsonify({'status': 'error', 'message': '目录不存在'}), 404
+
+    target = os.path.join(parent, name)
+    if os.path.exists(target):
+        return jsonify({'status': 'error', 'message': '同名文件或文件夹已存在'}), 409
+
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as e:
+        return jsonify({'status': 'error', 'message': f'创建失败：{e}'}), 500
+
+    rel_new = join_rel(rel, name)
+    audit('folder_create', rel_new)
+    broadcast_files()
+    return jsonify({'status': 'success', 'message': '文件夹已创建', 'path': rel_new})
+
+
 @app.route('/download/<path:filename>')
 def download(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
@@ -1746,7 +1946,8 @@ def api_shares():
         return jsonify({'status': 'error', 'message': '未登录'}), 401
 
     if request.method == 'GET':
-        name = clean_filename(request.args.get('name'))
+        raw_name = request.args.get('name')
+        name = norm_rel(raw_name) if raw_name is not None else None
         rows = db.list_shares(name) if name else db.list_shares()
         now = time.time()
         items = []
@@ -1766,7 +1967,7 @@ def api_shares():
         return jsonify({'items': items})
 
     data = request.get_json(silent=True) or {}
-    name = clean_filename(data.get('name'))
+    name = norm_rel(data.get('name'))
     if not name:
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
 
@@ -1819,42 +2020,42 @@ def delete_file():
         return jsonify({'status': 'error', 'message': '未登录'}), 401
 
     data = request.get_json(silent=True) or {}
-    name = clean_filename(data.get('name'))
-    if not name:
-        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+    rel = norm_rel(data.get('path') or data.get('name'))
+    if rel is None or rel == '':
+        return jsonify({'status': 'error', 'message': '路径非法'}), 400
 
-    if not can_manage_file(name, user):
+    if not can_manage_file(rel, user):
         return jsonify({'status': 'error', 'message': '无权操作该文件'}), 403
 
-    src = safe_join(app.config['UPLOAD_FOLDER'], name)
-    if src is None or not os.path.isfile(src):
+    src = store_path(rel)
+    if src is None or not os.path.exists(src):
         return jsonify({'status': 'error', 'message': '文件不存在'}), 404
 
+    is_dir = os.path.isdir(src)
     try:
-        trashed = move_to_trash(src, name)
+        trashed = move_to_trash(src, rel)
     except OSError as e:
         print(f"[删除] 移动到回收站失败: {e}")
         return jsonify({'status': 'error', 'message': '删除失败'}), 500
 
-    try:
-        db.mark_deleted(name)
-    except Exception as e:
-        print(f"[数据库] 标记删除失败: {e}")
+    if not is_dir:
+        try:
+            db.mark_deleted(rel)
+        except Exception as e:
+            print(f"[数据库] 标记删除失败: {e}")
+        try:
+            db.delete_shares_for(rel)
+        except Exception as e:
+            print(f"[数据库] 清理分享链接失败: {e}")
 
-    # 文件都没了，指向它的分享链接一并作废
-    try:
-        db.delete_shares_for(name)
-    except Exception as e:
-        print(f"[数据库] 清理分享链接失败: {e}")
-
-    audit('delete', name)
-    print(f"[删除] {name} -> {os.path.basename(trashed)}（操作人 {user['username']}）")
-    with app.app_context():
-        socketio.emit('file_update', get_file_list())
-    return jsonify({'status': 'success', 'message': '已移到回收站', 'trash': os.path.basename(trashed)})
+    audit('delete', rel)
+    print(f"[删除] {rel} -> {trashed}（操作人 {user['username']}）")
+    broadcast_files()
+    return jsonify({'status': 'success', 'message': '已移到回收站',
+                    'trash': trashed, 'is_dir': is_dir})
 
 
-# 重命名文件
+# 重命名文件 / 文件夹
 @app.route('/files/rename', methods=['POST'])
 def rename_file():
     user = current_user()
@@ -1862,26 +2063,31 @@ def rename_file():
         return jsonify({'status': 'error', 'message': '未登录'}), 401
 
     data = request.get_json(silent=True) or {}
-    old = clean_filename(data.get('name'))
-    new = clean_filename(data.get('newName'))
-    if not old or not new:
-        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
-    if old == new:
-        return jsonify({'status': 'success', 'name': new})
+    rel = norm_rel(data.get('path') or data.get('name'))
+    new_name = valid_entry_name(data.get('newName'))
+    if rel is None or rel == '' or not new_name:
+        return jsonify({'status': 'error', 'message': '名称非法'}), 400
 
-    if not can_manage_file(old, user):
+    parent_rel, old_base = os.path.split(rel)
+    parent_rel = parent_rel.replace('\\', '/')
+    if old_base == new_name:
+        return jsonify({'status': 'success', 'name': new_name, 'path': rel})
+
+    if not can_manage_file(rel, user):
         return jsonify({'status': 'error', 'message': '无权操作该文件'}), 403
 
-    src = safe_join(app.config['UPLOAD_FOLDER'], old)
-    if src is None or not os.path.isfile(src):
+    src = store_path(rel)
+    if src is None or not os.path.exists(src):
         return jsonify({'status': 'error', 'message': '文件不存在'}), 404
 
-    dst = safe_join(app.config['UPLOAD_FOLDER'], new)
+    new_rel = join_rel(parent_rel, new_name)
+    dst = store_path(new_rel)
     if dst is None:
-        return jsonify({'status': 'error', 'message': '文件名非法'}), 400
+        return jsonify({'status': 'error', 'message': '名称非法'}), 400
     if os.path.exists(dst):
         return jsonify({'status': 'error', 'message': '同名文件已存在'}), 409
 
+    is_dir = os.path.isdir(src)
     try:
         os.rename(src, dst)
     except OSError as e:
@@ -1889,46 +2095,72 @@ def rename_file():
         return jsonify({'status': 'error', 'message': '重命名失败'}), 500
 
     try:
-        db.rename_file(old, new)
+        if is_dir:
+            db.rename_tree(rel, new_rel)
+        else:
+            db.rename_file(rel, new_rel)
     except Exception as e:
         print(f"[数据库] 同步重命名失败: {e}")
 
-    audit('rename', old, f'-> {new}')
-    print(f"[重命名] {old} -> {new}（操作人 {user['username']}）")
-    with app.app_context():
-        socketio.emit('file_update', get_file_list())
-    return jsonify({'status': 'success', 'name': new})
+    audit('rename', rel, f'-> {new_rel}')
+    print(f"[重命名] {rel} -> {new_rel}（操作人 {user['username']}）")
+    broadcast_files()
+    return jsonify({'status': 'success', 'name': new_name, 'path': new_rel})
 
 
 # ---------------------------------------------------------------- 回收站
 TRASH_NAME_RE = re.compile(r'^\d{8}-\d{6}_(.+)$')
 
 
-def trash_original_name(name):
-    """从回收站文件名还原原始文件名：20261022-120000_xxx.txt -> xxx.txt"""
-    m = TRASH_NAME_RE.match(name)
-    return m.group(1) if m else name
+def trash_original_name(trash_rel):
+    """回收站内相对路径 -> 原始相对路径（去掉时间前缀，保留目录）"""
+    parent, base = os.path.split(trash_rel.replace('\\', '/'))
+    m = TRASH_NAME_RE.match(base)
+    name = m.group(1) if m else base
+    return join_rel(parent, name)
 
 
 def _trash_entries():
     items = []
     if not os.path.isdir(TRASH_DIR):
         return items
-    for entry in os.scandir(TRASH_DIR):
-        try:
-            if not entry.is_file():
+
+    for root, dirs, files in os.walk(TRASH_DIR):
+        keep = []
+        for d in list(dirs):
+            full = os.path.join(root, d)
+            if TRASH_NAME_RE.match(d):
+                # 被删掉的整个文件夹：当成一个条目，不再往里钻
+                dirs.remove(d)
+                try:
+                    st = os.stat(full)
+                except OSError:
+                    continue
+                items.append({
+                    'trash': os.path.relpath(full, TRASH_DIR).replace('\\', '/'),
+                    'name': trash_original_name(os.path.relpath(full, TRASH_DIR).replace('\\', '/')),
+                    'size': 0, 'mtime': st.st_mtime, 'is_dir': True,
+                })
+            else:
+                keep.append(d)
+
+        for f in files:
+            full = os.path.join(root, f)
+            try:
+                st = os.stat(full)
+            except OSError:
                 continue
-            st = entry.stat()
-        except OSError:
-            continue
-        items.append({
-            'trash': entry.name,
-            'name': trash_original_name(entry.name),
-            'size': st.st_size,
-            'mtime': st.st_mtime,
-        })
+            rel = os.path.relpath(full, TRASH_DIR).replace('\\', '/')
+            items.append({
+                'trash': rel,
+                'name': trash_original_name(rel),
+                'size': st.st_size,
+                'mtime': st.st_mtime,
+                'is_dir': False,
+            })
+
     user = current_user()
-    if ISOLATE_FILES and user and user.get('role') != 'admin':
+    if ISOLATE_FILES and user and user.get('role') not in ('admin', 'guest'):
         uid = user.get('id')
         items = [i for i in items
                  if (db.latest_record(i['name']) or {}).get('uploader_id') == uid]
@@ -1958,31 +2190,47 @@ def trash_restore():
     if not user:
         return jsonify({'status': 'error', 'message': '未登录'}), 401
 
-    name = clean_filename((request.get_json(silent=True) or {}).get('trash'))
-    if not name:
+    trash_rel = norm_rel((request.get_json(silent=True) or {}).get('trash'))
+    if not trash_rel:
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
 
-    src = safe_join(TRASH_DIR, name)
-    if src is None or not os.path.isfile(src):
+    src = safe_join(TRASH_DIR, *trash_rel.split('/'))
+    if src is None or not os.path.exists(src):
         return jsonify({'status': 'error', 'message': '回收站里没有这个文件'}), 404
 
-    target = unique_path(UPLOAD_FOLDER, trash_original_name(name))
+    original = trash_original_name(trash_rel)
+    dest = store_path(original)
+    if dest is None:
+        return jsonify({'status': 'error', 'message': '原路径非法'}), 400
+
+    os.makedirs(os.path.dirname(dest) or app.config['UPLOAD_FOLDER'], exist_ok=True)
+    target = dest if not os.path.exists(dest) else unique_path(os.path.dirname(dest),
+                                                              os.path.basename(dest))
     try:
         shutil.move(src, target)
     except OSError as e:
         print(f"[回收站] 恢复失败: {e}")
         return jsonify({'status': 'error', 'message': '恢复失败'}), 500
 
+    # 清掉回收站里空出来的目录
+    parent = os.path.dirname(src)
+    while parent and parent.startswith(TRASH_DIR) and parent != TRASH_DIR:
+        try:
+            os.rmdir(parent)
+        except OSError:
+            break
+        parent = os.path.dirname(parent)
+
+    restored_rel = os.path.relpath(target, app.config['UPLOAD_FOLDER']).replace('\\', '/')
     try:
-        db.restore_record(os.path.basename(target))
+        db.restore_record(restored_rel)
     except Exception as e:
         print(f"[数据库] 恢复记录失败: {e}")
 
-    audit('restore', os.path.basename(target))
-    print(f"[回收站] 恢复 {name} -> {os.path.basename(target)}（操作人 {user['username']}）")
-    with app.app_context():
-        socketio.emit('file_update', get_file_list())
-    return jsonify({'status': 'success', 'name': os.path.basename(target)})
+    audit('restore', restored_rel)
+    print(f"[回收站] 恢复 {trash_rel} -> {restored_rel}（操作人 {user['username']}）")
+    broadcast_files()
+    return jsonify({'status': 'success', 'name': os.path.basename(target), 'path': restored_rel})
 
 
 @app.route('/trash/purge', methods=['POST'])
@@ -1991,21 +2239,24 @@ def trash_purge():
     if not user:
         return jsonify({'status': 'error', 'message': '未登录'}), 401
 
-    name = clean_filename((request.get_json(silent=True) or {}).get('trash'))
-    if not name:
+    trash_rel = norm_rel((request.get_json(silent=True) or {}).get('trash'))
+    if not trash_rel:
         return jsonify({'status': 'error', 'message': '文件名非法'}), 400
 
-    path = safe_join(TRASH_DIR, name)
-    if path is None or not os.path.isfile(path):
+    path = safe_join(TRASH_DIR, *trash_rel.split('/'))
+    if path is None or not os.path.exists(path):
         return jsonify({'status': 'error', 'message': '回收站里没有这个文件'}), 404
     try:
-        os.remove(path)
+        if os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
     except OSError as e:
         print(f"[回收站] 彻底删除失败: {e}")
         return jsonify({'status': 'error', 'message': '删除失败'}), 500
 
-    audit('purge', name)
-    print(f"[回收站] 彻底删除 {name}（操作人 {user['username']}）")
+    audit('purge', trash_rel)
+    print(f"[回收站] 彻底删除 {trash_rel}（操作人 {user['username']}）")
     return jsonify({'status': 'success'})
 
 

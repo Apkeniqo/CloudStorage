@@ -289,5 +289,10 @@ def prune_events(keep=5000):
         "DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT ?)",
         (int(keep),),
     )
-
-
+def rename_tree(old_prefix, new_prefix):
+    """文件夹改名：把前缀下的所有记录一起改掉"""
+    pattern = old_prefix.replace('\\', '/') + '/%'
+    return _write(
+        "UPDATE files SET name = ? || substr(name, ?) WHERE name LIKE ?",
+        (new_prefix, len(old_prefix) + 1, pattern),
+    )
