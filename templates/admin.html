@@ -27,6 +27,43 @@
             padding: 0;
         }
 
+        .event-pager {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--card-border);
+            font-size: 12.5px;
+        }
+
+        .pager-btn {
+            padding: 6px 14px;
+            font-size: 12.5px;
+            color: var(--text-main);
+            background: var(--hover-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            cursor: pointer;
+        }
+
+        .pager-btn:hover:not(:disabled) {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
+        .pager-btn:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+
+        .pager-info {
+            color: var(--text-secondary);
+            min-width: 150px;
+            text-align: center;
+        }
+
         .cfg-search {
             position: relative;
             display: flex;
@@ -370,8 +407,13 @@
 
     <div class="card">
         <h2>最近事件</h2>
-        <p class="sub">登录、上传、删除、改名、分享、用户与配置变更（最近 100 条）</p>
+        <p class="sub">登录、上传、删除、改名、分享、用户与配置变更（每页 10 条，最新在前）</p>
         <div id="event-list" class="event-list">加载中...</div>
+        <div class="event-pager" id="event-pager" style="display:none">
+            <button class="pager-btn" id="ev-prev" onclick="loadEvents(eventPage - 1)">← 上一页</button>
+            <span class="pager-info" id="ev-info"></span>
+            <button class="pager-btn" id="ev-next" onclick="loadEvents(eventPage + 1)">下一页 →</button>
+        </div>
     </div>
 
     <div class="card config-card">
@@ -593,14 +635,22 @@
         });
     }
 
-    async function loadEvents() {
+    let eventPage = 1;
+
+    async function loadEvents(page) {
+        if (typeof page === 'number' && isFinite(page)) eventPage = page;
         const box = document.getElementById('event-list');
         try {
-            const res = await fetch('/admin/events?limit=100', { cache: 'no-store' });
+            const res = await fetch('/admin/events?limit=10&page=' + eventPage, { cache: 'no-store' });
             if (!res.ok) { box.textContent = '加载失败'; return; }
             const data = await res.json();
             const items = data.events || [];
-            if (!items.length) { box.innerHTML = '<div class="empty">还没有事件</div>'; return; }
+            eventPage = data.page || 1;
+            renderEventPager(data);
+            if (!items.length) {
+                box.innerHTML = '<div class="empty">还没有事件</div>';
+                return;
+            }
             box.innerHTML = items.map(e => `
                 <div class="event-row">
                     <span class="e-time">${fmtDateTime(e.ts)}</span>
@@ -612,6 +662,20 @@
         } catch (e) {
             box.textContent = '加载失败：' + e;
         }
+    }
+
+    function renderEventPager(data) {
+        const pager = document.getElementById('event-pager');
+        const info = document.getElementById('ev-info');
+        const prev = document.getElementById('ev-prev');
+        const next = document.getElementById('ev-next');
+        const total = data.total || 0;
+        const pages = data.pages || 1;
+
+        if (pager) pager.style.display = total > 0 ? 'flex' : 'none';
+        if (info) info.textContent = '第 ' + eventPage + ' / ' + pages + ' 页 · 共 ' + total + ' 条';
+        if (prev) prev.disabled = eventPage <= 1;
+        if (next) next.disabled = eventPage >= pages;
     }
 
     async function loadUsers() {

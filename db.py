@@ -302,8 +302,14 @@ def add_event(action, actor='', target='', detail='', ip=''):
     )
 
 
-def list_events(limit=100):
-    return _all("SELECT * FROM events ORDER BY id DESC LIMIT ?", (int(limit),))
+def list_events(limit=100, offset=0):
+    return _all("SELECT * FROM events ORDER BY id DESC LIMIT ? OFFSET ?",
+                (int(limit), max(0, int(offset))))
+
+
+def count_events():
+    row = _one("SELECT COUNT(*) AS n FROM events")
+    return int((row or {}).get('n') or 0)
 
 
 def prune_events(keep=5000):

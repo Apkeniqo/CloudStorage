@@ -1316,10 +1316,26 @@ def audit(action, target='', detail=''):
 def admin_events():
     _require_admin()
     try:
-        limit = max(1, min(int(request.args.get('limit', 100)), 500))
+        per_page = max(1, min(int(request.args.get('limit', 10)), 200))
     except (TypeError, ValueError):
-        limit = 100
-    return jsonify({'events': db.list_events(limit)})
+        per_page = 10
+
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    total = db.count_events()
+    pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, pages)
+
+    return jsonify({
+        'events': db.list_events(per_page, (page - 1) * per_page),
+        'total': total,
+        'page': page,
+        'per_page': per_page,
+        'pages': pages,
+    })
 
 
 @app.route('/admin')
