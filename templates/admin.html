@@ -27,6 +27,51 @@
             padding: 0;
         }
 
+        .cfg-search {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 12px 0 4px;
+            padding: 0 10px;
+            height: 34px;
+            background: var(--hover-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            max-width: 420px;
+        }
+
+        .cfg-search:focus-within {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.18);
+        }
+
+        .cfg-search input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-main);
+            font-size: 13px;
+        }
+
+        .cfg-search-clear {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 4px;
+        }
+
+        .cfg-empty {
+            margin: 10px 0 0;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         .admin-wrap {
             width: 100%;
             max-width: 900px;
@@ -329,12 +374,22 @@
         <div id="event-list" class="event-list">加载中...</div>
     </div>
 
-    <div class="card">
+    <div class="card config-card">
         <h2>配置</h2>
         <p class="sub">保存后写回 <code>{{ info.config_path }}</code>，注释和顺序都会保留</p>
 
+        <div class="cfg-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+            <input type="text" id="cfg-search" placeholder="搜索设置项（名称 / 说明 / 键名）"
+                   oninput="filterConfig(this.value)" spellcheck="false">
+            <button class="cfg-search-clear" id="cfg-search-clear" onclick="clearConfigSearch()"
+                    title="清空" style="display:none">✕</button>
+        </div>
+        <div class="cfg-empty" id="cfg-empty" style="display:none">没有匹配的设置项</div>
+
         {% for group in groups %}
-        <h3 style="font-size:13px;margin:18px 0 2px;color:var(--text-secondary);">{{ group.name }}</h3>
+        <h3 class="cfg-group-title" data-group="{{ group.name }}"
+            style="font-size:13px;margin:18px 0 2px;color:var(--text-secondary);">{{ group.name }}</h3>
         {% for item in group['items'] %}
         <div class="field">
             <div class="label">
@@ -420,6 +475,42 @@
 
 <script>
     const CSRF = {{ csrf|tojson }};
+
+    // 设置项搜索
+    function filterConfig(q) {
+        q = (q || '').trim().toLowerCase();
+        const clearBtn = document.getElementById('cfg-search-clear');
+        if (clearBtn) clearBtn.style.display = q ? 'inline' : 'none';
+
+        let shown = 0;
+        document.querySelectorAll('.config-card .field').forEach(function (f) {
+            const keyEl = f.querySelector('[data-key]');
+            const key = keyEl ? (keyEl.getAttribute('data-key') || '').toLowerCase() : '';
+            const hit = !q || f.textContent.toLowerCase().indexOf(q) !== -1
+                || key.indexOf(q) !== -1;
+            f.style.display = hit ? '' : 'none';
+            if (hit) shown++;
+        });
+
+        // 没有可见项的组标题一起藏起来
+        document.querySelectorAll('.cfg-group-title').forEach(function (h) {
+            let n = h.nextElementSibling, any = false;
+            while (n && !n.classList.contains('cfg-group-title')) {
+                if (n.classList.contains('field') && n.style.display !== 'none') any = true;
+                n = n.nextElementSibling;
+            }
+            h.style.display = any ? '' : 'none';
+        });
+
+        const empty = document.getElementById('cfg-empty');
+        if (empty) empty.style.display = shown ? 'none' : '';
+    }
+
+    function clearConfigSearch() {
+        const box = document.getElementById('cfg-search');
+        if (box) { box.value = ''; box.focus(); }
+        filterConfig('');
+    }
 
     function showToast(id, ok, text) {
         const el = document.getElementById(id);

@@ -346,6 +346,7 @@ function navTo(view) {
     if (view === 'home' || view === 'recent') {
         return loadFiles(null);
     }
+    closeSidebar();
     if (view === 'trash') {
         return loadTrash();
     }
@@ -474,7 +475,19 @@ async function emptyTrash() {
 
 function toggleSidebar() {
     const el = document.getElementById('sidebar');
-    if (el) el.classList.toggle('open');
+    if (!el) return;
+    const open = !el.classList.contains('open');
+    el.classList.toggle('open', open);
+    document.body.classList.toggle('sidebar-open', open);
+    const mask = document.getElementById('sidebar-mask');
+    if (mask) mask.setAttribute('aria-hidden', open ? 'false' : 'true');
+}
+
+function closeSidebar() {
+    const el = document.getElementById('sidebar');
+    if (!el) return;
+    el.classList.remove('open');
+    document.body.classList.remove('sidebar-open');
 }
 
 // 新建文件夹
