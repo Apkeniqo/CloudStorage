@@ -147,7 +147,7 @@ body {
 .header {
     padding: 12px 18px 2px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;   /* 工具栏始终靠右 */
     align-items: center;
     border-bottom: none;
     flex-wrap: wrap; /* 允许小屏下自动换行 */
