@@ -1613,9 +1613,8 @@ body.has-bg {
 body.has-bg::before {
     content: '';
     position: fixed;
-    /* 页面整体有 zoom:1.2，固定层会被再放大 1.2 倍：
-       用 6% 内缩抵消缩放，并留出模糊所需的溢出边距，背景始终铺满窗口 */
-    inset: 6%;
+    /* 稍微溢出一点，覆盖模糊的边缘，同时保证任何分辨率的图都铺满窗口 */
+    inset: -32px;
     background-image: var(--bg-image, none);
     background-size: cover;
     background-position: center center;
@@ -1692,4 +1691,8 @@ body.has-bg .file-list-container {
 
 html:not([data-theme="dark"]) body.has-bg .file-list-container {
     background: rgba(255, 255, 255, 0.84);
+}
+/* 低分辨率背景放大时平滑插值，避免出现马赛克 */
+body.has-bg::before {
+    image-rendering: auto;
 }
