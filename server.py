@@ -1147,7 +1147,8 @@ def admin_page():
         'users': stats.get('users', 0),
     }
     return render_template('admin.html', user=user, csrf=_csrf_token(),
-                           groups=config_groups(), info=info)
+                           groups=config_groups(), info=info,
+                           embed=(request.args.get('embed') == '1'))
 
 
 @app.route('/admin/config', methods=['POST'])

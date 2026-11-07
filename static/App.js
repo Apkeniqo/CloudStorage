@@ -328,12 +328,27 @@ function navTo(view) {
     if (view === 'trash') {
         return loadTrash();
     }
+    if (view === 'admin') {
+        return showAdmin();
+    }
+}
+
+// 管理后台在同页展示（iframe），不跳转
+function showAdmin() {
+    currentView_nav = 'admin';
+    document.body.classList.add('admin-mode');
+    document.body.classList.remove('trash-mode');
+    const frame = document.getElementById('admin-frame');
+    if (frame && !frame.getAttribute('src')) frame.src = '/admin?embed=1';
+    updateActiveNav();
+    playViewAnimation();
 }
 
 // 切换「文件 / 回收站」两种视图
 function setMode(mode) {
     const isTrash = mode === 'trash';
     document.body.classList.toggle('trash-mode', isTrash);
+    document.body.classList.toggle('admin-mode', mode === 'admin');
     const delBtn = document.getElementById('sel-delete');
     if (delBtn) delBtn.textContent = isTrash ? '彻底删除' : '删除';
     updateClipboardButtons && updateClipboardButtons();
@@ -685,6 +700,9 @@ socket.on('connect_error', async () => {
 
 socket.on('file_update', () => {
     // 服务端只发一个"有变化"的信号，具体内容按当前目录重新拉取
+    if (currentView_nav === 'admin') {
+        return;       // 管理后台是 iframe，不要被文件变动刷新打断
+    }
     if (currentView_nav === 'trash') {
         loadTrash();
     } else {
