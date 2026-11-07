@@ -1,6 +1,7 @@
 # 运行期数据（不要提交）
 config.ini
 CloudStorage/
+Trash/
 uploads_temp/
 logs/
 
