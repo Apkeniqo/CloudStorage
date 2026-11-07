@@ -306,6 +306,9 @@ function navTo(view) {
 function setMode(mode) {
     const isTrash = mode === 'trash';
     document.body.classList.toggle('trash-mode', isTrash);
+    const delBtn = document.getElementById('sel-delete');
+    if (delBtn) delBtn.textContent = isTrash ? '彻底删除' : '删除';
+    updateClipboardButtons && updateClipboardButtons();
     const uploadLabel = document.querySelector('.upload-btn-label');
     if (uploadLabel) uploadLabel.style.display = isTrash ? 'none' : '';
 }
@@ -770,12 +773,13 @@ const folderIconSvg = `<svg class="folder-icon" width="20" height="20" viewBox="
 
 function trashItemHtml(file) {
     const trashPath = escapeHtml(file.path || file.name);
+    const trashed = selectedPaths.has(file.path || file.name) ? '1' : '';
     const safeName = escapeHtml(file.name);
     const icon = file.is_dir ? folderIconSvg : getFileIconSvg(file.name);
     const sizeText = file.is_dir ? '—' : formatSize(file.size);
     return `
         <div class="file-item trash-row">
-            <div class="col-check"></div>
+            <div class="col-check"><input type="checkbox" class="row-check" data-path="${trashPath}"${trashed ? ' checked' : ''}></div>
             <div class="file-name" title="${safeName}">
                 ${icon}
                 <span class="folder-name">${safeName}</span>
@@ -897,6 +901,14 @@ function renderFileList() {
 
 // ---------------- 多选 ----------------
 function updateSelectionBar() {
+    // 当前视图里已经不存在的条目（被删掉/切走了）要从选中集合里剔除，避免"已选 N 项"残留
+    const visible = new Set(renderedFiles.map(f => f.path || f.name));
+    if (selectedPaths.size) {
+        for (const p of Array.from(selectedPaths)) {
+            if (!visible.has(p)) selectedPaths.delete(p);
+        }
+    }
+
     const bar = document.getElementById('selection-bar');
     const num = document.getElementById('selection-num');
     const all = document.getElementById('select-all');
@@ -926,26 +938,39 @@ function toggleSelectAll(checked) {
     renderFileList();
 }
 
+// 重新加载当前视图（文件 / 主页 / 回收站）
+function reloadCurrentView() {
+    if (currentView_nav === 'trash') return loadTrash();
+    if (currentView_nav === 'home') return loadFiles(null);
+    return loadFiles(currentPath);
+}
+
 async function deleteSelected() {
     const paths = Array.from(selectedPaths);
     if (!paths.length) return;
-    if (!confirm(`删除选中的 ${paths.length} 项？\n会移到回收站，之后可以恢复。`)) return;
+
+    const inTrash = currentView_nav === 'trash';
+    const tip = inTrash
+        ? `彻底删除选中的 ${paths.length} 项？\n此操作不可恢复。`
+        : `删除选中的 ${paths.length} 项？\n会移到回收站，之后可以恢复。`;
+    if (!confirm(tip)) return;
 
     let ok = 0;
     for (const p of paths) {
         try {
-            const res = await fetch('/files/delete', {
+            const res = await fetch(inTrash ? '/trash/purge' : '/files/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ path: p })
+                body: JSON.stringify(inTrash ? { trash: p } : { path: p })
             });
             if (res.ok) ok++;
         } catch (e) { /* 单条失败继续 */ }
     }
     selectedPaths.clear();
-    loadFiles(currentPath);
+    reloadCurrentView();
+    updateSelectionBar();
     if (ok < paths.length) {
-        alert(`已删除 ${ok} 项，${paths.length - ok} 项失败`);
+        alert(`完成 ${ok} 项，${paths.length - ok} 项失败`);
     }
 }
 
@@ -968,8 +993,9 @@ function updateClipboardButtons() {
     const copyBtn = document.getElementById('copy-btn');
     const cutBtn = document.getElementById('cut-btn');
     const pasteBtn = document.getElementById('paste-btn');
-    const hasSel = selectedPaths.size > 0;
-    const hasClip = clipboard.paths.length > 0;
+    const inTrash = currentView_nav === 'trash';
+    const hasSel = selectedPaths.size > 0 && !inTrash;
+    const hasClip = clipboard.paths.length > 0 && !inTrash;
     if (copyBtn) copyBtn.disabled = !hasSel;
     if (cutBtn) cutBtn.disabled = !hasSel;
     if (pasteBtn) {
@@ -1117,7 +1143,7 @@ async function renameFile(itemPath, isDir) {
         if (!res.ok) {
             alert(data.message || `重命名失败（${res.status}）`);
         } else {
-            loadFiles(currentPath);
+            reloadCurrentView();
         }
     } catch (e) {
         alert('重命名失败：' + e);
@@ -1141,7 +1167,7 @@ async function deleteFile(itemPath, isDir) {
         if (!res.ok) {
             alert(data.message || `删除失败（${res.status}）`);
         } else {
-            loadFiles(currentPath);
+            reloadCurrentView();
         }
     } catch (e) {
         alert('删除失败：' + e);

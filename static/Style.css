@@ -708,6 +708,13 @@ body {
     color: var(--text-secondary);
 }
 
+/* 图标视图里空状态要占满整行，否则会被挤成一列窄文字 */
+.view-grid #file-items-wrapper .empty-state {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 80px 16px;
+}
+
 /* 顶栏：标题 + 居中搜索 + 右侧操作（仿 OneDrive） */
 .topbar-title {
     font-size: 14px;
