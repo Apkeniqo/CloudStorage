@@ -345,3 +345,18 @@
 - 修复搜索框「双层边框」问题：通用 TextBox 规则（`input[type="text"]`）在文件末尾，同优先级覆盖了 `.search-box input`，导致搜索框内部又套了一层填充与描边、高度被挤压。现在为搜索框内部输入框单独提高特异性并清空内层外观，外层容器只保留一层 WinUI TextBox 视觉
 - 搜索框聚焦不再改变宽度（去掉 160→200 的跳动），聚焦时只改填充与底边强调线
 - 界面缩放从 120% 恢复为 **100%**：移除 `html { zoom: 1.2 }` 与移动端的 zoom 覆盖，各控件按 WinUI 原始尺寸（32 高、14 字号）呈现
+## beta 2026.1116.3 — 动画对齐 WinUI 3
+
+按 WinUI 主题资源里的动效参数重做交互反馈，控件外观不变但动效统一：
+
+- **时长/曲线**：`ControlFastAnimationDuration` 167ms、`ControlNormalAnimationDuration` 250ms、`ControlFasterAnimationDuration` 83ms；曲线统一 `cubic-bezier(0, 0, 0, 1)`（FastOutSlowIn），另备 decelerate / accelerate 两条
+- **TextBox 聚焦**：底部强调线由 `::after` 从中心向两侧展开（250ms），不再是瞬间变色
+- **CheckBox**：勾选时对勾从 0.4 倍放大淡入（167ms），背景同步过渡
+- **Flyout / 对话框**：淡入 + 轻微下移收拢（167ms），遮罩层单独淡入，不再把对话框内容一起变透明
+- **视图切换**：EntranceThemeTransition 风格——淡入 + 12px 上移（250ms）
+- **导航指示条**：切换时 250ms 平滑过渡（原先 167ms）
+- **按下反馈**：按钮按下用 83ms，比悬停（167ms）更快
+- **主题切换**：瞬时切换（临时关闭过渡），与 WinUI 一致，不再整页渐变
+- **拖拽遮罩 / 上传提示**：淡入淡出 167ms
+- **减少动画**：遵循系统 `prefers-reduced-motion`，此时全部动画降为 1ms
+- 滚动区域加 `scroll-behavior: smooth`（对齐 ScrollViewer 平滑滚动）

@@ -238,13 +238,26 @@ function applyTheme() {
         activeTheme = isSystemDark ? 'dark' : 'light';
     }
 
-    document.documentElement.setAttribute('data-theme', activeTheme);
+    // WinUI 的主题切换是瞬时的：切换期间临时关闭过渡，避免整页颜色渐变
+    const root = document.documentElement;
+    const changed = root.getAttribute('data-theme') !== activeTheme;
+    if (changed) root.classList.add('theme-switching');
+
+    root.setAttribute('data-theme', activeTheme);
 
     const sunIcon = document.getElementById('theme-icon-sun');
     const moonIcon = document.getElementById('theme-icon-moon');
     if (sunIcon && moonIcon) {
         sunIcon.style.display = activeTheme === 'dark' ? 'inline-block' : 'none';
         moonIcon.style.display = activeTheme === 'dark' ? 'none' : 'inline-block';
+    }
+
+    if (changed) {
+        // 强制一次样式计算后立即恢复过渡，使本次切换不产生渐变动画
+        void root.offsetWidth;
+        requestAnimationFrame(function () {
+            root.classList.remove('theme-switching');
+        });
     }
 }
 

@@ -11,11 +11,17 @@ html {
     --ControlContentThemeFontSize: 14px;
     --ControlHeight: 32px;
 
-    /* 动效曲线与时长（WinUI FastOutSlowIn / Normal） */
-    --duration-fast: 0.167s;
-    --duration-normal: 0.2s;
-    --duration-faster: 0.083s;
+    /* 动效曲线与时长，取自 WinUI 主题资源：
+       ControlFastAnimationDuration 167ms / ControlNormalAnimationDuration 250ms
+       ControlFasterAnimationDuration 83ms / ControlFastOutSlowInKeySpline (0,0,0,1) */
+    --duration-faster: 83ms;
+    --duration-fast: 167ms;
+    --duration-normal: 250ms;
+    --duration-slow: 333ms;
     --fast-out-slow-in: cubic-bezier(0, 0, 0, 1);
+    --ease-standard: cubic-bezier(0, 0, 0, 1);
+    --ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
+    --ease-accelerate: cubic-bezier(0.7, 0, 1, 0.5);
 
     /* 背景与图层 */
     --app-bg: #f3f3f3;
@@ -311,9 +317,27 @@ body {
 .search-box:focus-within {
     background: var(--ctrl-fill-input-active);
     border-color: var(--ctrl-border);
-    border-bottom-color: var(--accent-base);
-    /* 聚焦时底边加粗到 2px，用内阴影避免布局跳动 */
-    box-shadow: inset 0 -1px 0 0 var(--accent-base);
+    border-bottom-color: transparent;
+}
+
+/* 聚焦下划线：从中心向两侧展开，等价于 WinUI 的 FocusBorder 动画 */
+.search-box::after {
+    content: '';
+    position: absolute;
+    left: -1px;
+    right: -1px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: var(--accent-base);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform var(--duration-normal) var(--ease-standard);
+    pointer-events: none;
+}
+
+.search-box:focus-within::after {
+    transform: scaleX(1);
 }
 
 .search-icon {
@@ -1142,17 +1166,38 @@ body {
     position: fixed;
     inset: 0;
     z-index: 999;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.35);
+    background: transparent;
+    pointer-events: none;
+    visibility: hidden;
+    transition: visibility 0s linear var(--duration-fast);
+}
+
+.drop-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.30);
     backdrop-filter: blur(3px);
     -webkit-backdrop-filter: blur(3px);
-    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .drop-overlay.show {
-    display: flex;
+    visibility: visible;
+    transition: none;
+}
+
+.drop-overlay.show::before {
+    opacity: 1;
+}
+
+.drop-overlay .drop-card {
+    position: relative;
+    z-index: 1;
 }
 
 .drop-card {
@@ -1251,9 +1296,9 @@ body.app-body {
     border-radius: 2px;
     background: var(--accent-base);
     opacity: 0;
-    transform: translateY(-50%) scaleY(0.3);
-    transition: transform var(--duration-fast) var(--fast-out-slow-in),
-                opacity var(--duration-fast) var(--fast-out-slow-in);
+    transform: translateY(-50%) scaleY(0.2);
+    transition: transform var(--duration-normal) var(--ease-standard),
+                opacity var(--duration-normal) var(--ease-standard);
     pointer-events: none;
 }
 
@@ -1494,14 +1539,36 @@ body.trash-mode #file-input {
     position: fixed;
     inset: 0;
     z-index: 1200;
-    display: none;
+    display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.4);
+    background: transparent;
+    visibility: hidden;
+    transition: visibility 0s linear var(--duration-fast);
+}
+
+/* 遮罩层单独淡入（WinUI SmokeFillColorDefault ≈ 30% 黑），不影响对话框内容 */
+.modal-mask::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.30);
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .modal-mask.show {
-    display: flex;
+    visibility: visible;
+    transition: none;
+}
+
+.modal-mask.show::before {
+    opacity: 1;
+}
+
+.modal-mask .modal-card {
+    position: relative;
+    z-index: 1;
 }
 
 .modal-card {
@@ -1771,15 +1838,27 @@ body.trash-mode #file-input {
     border-color: var(--accent-base);
 }
 
-.col-check input:checked::after,
-.row-check:checked::after,
-#select-all:checked::after {
+.col-check input::after,
+.row-check::after,
+#select-all::after {
     content: '';
     position: absolute;
     inset: 0;
     background: var(--accent-text);
     -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M6.2 11.4L2.8 8l-1.2 1.2 4.6 4.6L14.4 5.6 13.2 4.4z'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
     mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='black' d='M6.2 11.4L2.8 8l-1.2 1.2 4.6 4.6L14.4 5.6 13.2 4.4z'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+    /* WinUI CheckBox 勾选动画：对勾从 0.4 放大到 1 */
+    transform: scale(0.4);
+    opacity: 0;
+    transition: transform var(--duration-fast) var(--ease-standard),
+                opacity var(--duration-fast) var(--ease-standard);
+}
+
+.col-check input:checked::after,
+.row-check:checked::after,
+#select-all:checked::after {
+    transform: scale(1);
+    opacity: 1;
 }
 
 .col-check input:disabled,
@@ -1862,14 +1941,14 @@ body.trash-mode #file-input {
     color: var(--accent-text);
 }
 
-/* 视图切换动效 */
+/* 视图切换：对齐 WinUI EntranceThemeTransition（淡入 + 轻微上移） */
 @keyframes viewFade {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: none; }
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .file-list-container.animate {
-    animation: viewFade 0.22s ease;
+    animation: viewFade var(--duration-normal) var(--ease-standard) both;
 }
 
 /* 工具栏禁用态（没有选中/剪贴板为空时） */
@@ -2436,4 +2515,71 @@ select {
     padding: 2px 4px;
     background: transparent;
     border: 0;
+}
+
+/* ==================================================================
+   WinUI 动画层
+   ================================================================== */
+
+/* Flyout 打开：淡入 + 轻微下移收拢（167ms，对齐 PopupThemeTransition） */
+@keyframes winFlyoutIn {
+    from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-mask.show .modal-card {
+    animation: winFlyoutIn var(--duration-fast) var(--ease-standard) both;
+    transform-origin: center top;
+}
+
+/* 按下反馈比悬停更快（83ms） */
+.btn-icon:active,
+.action-btn:active,
+.sel-btn:active,
+.pager-btn:active {
+    transition-duration: var(--duration-faster);
+}
+
+/* 输入框聚焦底边（无法用伪元素的原生 input，用内阴影过渡近似） */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+select,
+textarea {
+    transition: background-color var(--duration-fast) var(--ease-standard),
+                border-color var(--duration-fast) var(--ease-standard),
+                box-shadow var(--duration-normal) var(--ease-standard);
+}
+
+/* 上传提示：从下方滑入（TeachingTip 风格） */
+.upload-toast {
+    transition: opacity var(--duration-fast) var(--ease-standard),
+                transform var(--duration-fast) var(--ease-standard);
+}
+
+/* 滚动：WinUI ScrollViewer 的平滑滚动 */
+.file-list-container {
+    scroll-behavior: smooth;
+}
+
+/* 主题切换：WinUI 主题切换是瞬时的，临时关闭过渡避免整页渐变色 */
+html.theme-switching,
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+    transition: none !important;
+    animation: none !important;
+}
+
+/* 尊重系统「减少动画」设置（WinUI 同样遵循） */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+    }
 }
