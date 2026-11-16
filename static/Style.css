@@ -1,6 +1,4 @@
-/* 整体放大到 120%：Chrome / Edge / Safari 支持，Firefox 126+ 也支持 */
 html {
-    zoom: 1.2;
     height: 100%;
 }
 
@@ -311,7 +309,6 @@ body {
 }
 
 .search-box:focus-within {
-    width: 200px;
     background: var(--ctrl-fill-input-active);
     border-color: var(--ctrl-border);
     border-bottom-color: var(--accent-base);
@@ -2120,13 +2117,6 @@ body.sidebar-open {
     }
 }
 
-/* 移动端取消 120% 缩放：否则布局宽 = 视口*1.2，右侧按钮会被裁掉 */
-@media (max-width: 900px) {
-    html {
-        zoom: 1;
-    }
-}
-
 /* 被剪切的文件：半透明，表示“待移动” */
 .file-item.cutting {
     opacity: 0.42;
@@ -2401,4 +2391,49 @@ select {
     background-repeat: no-repeat;
     background-position: right 10px center;
     background-size: 10px 10px;
+}
+
+/* ==================================================================
+   搜索框内部 input：外层 .search-box 已经是 TextBox 容器，
+   内部输入框不能再套一层填充/描边（否则出现双层边框、高度挤压）
+   ================================================================== */
+.search-box input[type="text"],
+.search-box input[type="search"],
+.search-box input {
+    min-height: 0;
+    height: 30px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    font-size: var(--ControlContentThemeFontSize);
+    color: var(--text-primary);
+}
+
+.search-box input[type="text"]:hover,
+.search-box input[type="search"]:hover,
+.search-box input:hover {
+    background: transparent;
+    border: 0;
+}
+
+.search-box input[type="text"]:focus,
+.search-box input[type="search"]:focus,
+.search-box input:focus {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
+/* 搜索框内图标与文字的间距 */
+.search-box .search-icon {
+    margin-right: 8px;
+}
+
+.search-box .clear-search-btn {
+    min-height: 0;
+    padding: 2px 4px;
+    background: transparent;
+    border: 0;
 }
