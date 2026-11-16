@@ -326,3 +326,17 @@
 - 「最近事件」改成**分页**，每页 10 条，底部带「← 上一页 / 第 X / Y 页 · 共 N 条 / 下一页 →」，首页/末页按钮自动置灰
 - `/admin/events` 支持 `page` 参数，返回 `{events, total, page, per_page, pages}`；越界页码自动夹到有效范围
 - 数据层新增 `db.list_events(limit, offset)` 与 `db.count_events()`，不再一次拉 100 条
+## beta 2026.1116.1 — 控件 UI 改造为 WinUI 3 风格
+
+参考 [WinUIonWeb](https://github.com/Furry-Xiyi/WinUIonWeb)（Vue 实现的 WinUI 控件库）的设计 token 与控件形态，把界面控件统一到 WinUI 3 规范：
+
+- **设计 token**：改用 WinUI 官方色值——`app-bg` #F3F3F3 / #202020、`card-bg` rgba(255,255,255,.70) / rgba(255,255,255,.0512)、文本四级灰度、`ControlCornerRadius` 4px、`OverlayCornerRadius` 8px、强调色 #0067C0 / #4CC2FF
+- **字体与动效**：Segoe UI Variable 字体栈；过渡统一为 167ms `cubic-bezier(0,0,0,1)`；键盘聚焦为 WinUI 双色焦点圈
+- **按钮**：工具栏按钮改为 CommandBar 的 Subtle 风格（32×32、4 圆角、悬停 SubtleFill）；上传/登录/保存为主色 AccentButton（无投影、按下变暗）；取消/分页为 SecondaryButton（CtrlFill + 上浅下深描边）
+- **输入框**：TextBox/ComboBox 形态——CtrlFill 填充 + 1px 描边，聚焦时底边变 2px 强调色、填充变亮，下拉箭头改为自绘
+- **复选框**：自绘 WinUI CheckBox（20×20、4 圆角、选中强调色填充 + 对勾、支持半选）
+- **导航**：NavigationView 项 36 高、4 圆角、悬停 SubtleFill、选中 SubtleFill + 3×16 强调条
+- **列表/卡片**：ListView 行 40 高、悬停 SubtleFill、选中细边框；卡片改为 CardBackground + CardStroke + 8 圆角、去掉重投影
+- **对话框**：Flyout 亚克力背景（blur 30px + saturate 1.25）、8 圆角、1px 边框、20px 标题
+- **滚动条**：WinUI 细滚动条（12px 轨道、圆角滑块、悬停变粗）
+- 顺带修复：`color-scheme` 跟随主题，原生下拉/滚动条在深色下不再发白
