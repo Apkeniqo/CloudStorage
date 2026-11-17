@@ -1727,7 +1727,8 @@ def index():
     user = current_user()
     return render_template('index.html',
                            is_admin=bool(user and user.get('role') == 'admin'),
-                           username=(user or {}).get('username', ''))
+                           username=(user or {}).get('username', ''),
+                           asset_version=version.VERSION.replace(' ', '-'))
 
 # 检查已上传的切片 (断点续传)
 @app.route('/upload/check', methods=['GET'])
