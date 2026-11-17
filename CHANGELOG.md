@@ -950,3 +950,16 @@ if expect_sha and git_blob_sha(data) != expect_sha:
 节点 https://git.yylx.win 不可用：The read operation timed out
 下载 20371 字节，SHA 校验：True，含 probe_nodes：True   ← ghproxy.net 成功
 ```
+## beta 2026.1117.44 — 侧栏加宽、全屏铺满
+
+- 侧栏 `216px` → **`260px`**（`.sidebar` 的 `width` 和 `flex-basis` 一起改）
+- `.app-shell` 的 `max-width: 1400px` → `none`：之前宽屏下内容被居中限宽，2560 宽的屏幕两侧各留 580px 空白；现在铺满，只留 8px 边距
+- 文件容器 `margin: 0 16px 4px` → `0 10px 4px`，`padding` 16px → 14px
+
+实测（1600×900）：
+
+```
+侧栏   16 → 276   （宽 260px）
+内容   300 → 1566 （宽 1266px，右侧只剩 34px）
+app-shell max-width: none
+```
