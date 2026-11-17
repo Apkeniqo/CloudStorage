@@ -531,3 +531,7 @@
 - **进入动画一致**：`.admin-view.show` 用与列表相同的 `vueViewEnter`（淡入 + 12px 上移，250ms FastOutSlowIn）
 - **白闪原因**：之前后台是条件渲染，每次切换都会重建 iframe → 重新请求 `/admin` → 页面白屏一瞬。现在 iframe **常驻**，首次进入才加载，之后只切换 `display`，再进入不再白闪
 - 实测：进入 1166×786 + `vueViewEnter 0.25s`；离开后 src 保持；再次进入 display 切换且 src 不变
+## beta 2026.1117.17 — 后台宽度对齐 + 弹窗按钮改用组件样式
+
+- **后台宽度**：`.admin-view` 补上与 `.file-list-container` 相同的 `margin: 0 16px 4px`，后台内容不再比文件列表宽
+- **弹窗按钮**：背景弹窗的「选择图片 / 恢复默认」、选择条的「删除 / 取消」不再套自定义 `.sel-btn` 样式，改用组件自身的 `AccentButtonStyle` / 默认样式——按钮的可点区域与视觉完全一致（实测 rect 80×32，内部承载层同为 80×32），颜色也走组件主题（深色主题下 Accent 为亮蓝底黑字）

@@ -398,13 +398,13 @@ export const SelectionBar = {
                 h('span', { class: 'selection-count' }, ['已选 ', h('b', {}, String(selectedCount.value)), ' 项']),
                 h('div', { class: 'selection-actions' }, [
                     h(Button, {
-                        class: 'sel-btn',
                         Content: '删除',
+                        MinHeight: 32,
                         onClick: () => deleteSelected().catch(e => toast(e.message, 'error'))
                     }),
                     h(Button, {
-                        class: 'sel-btn ghost',
                         Content: '取消',
+                        MinHeight: 32,
                         onClick: clearSelection
                     })
                 ])
@@ -488,11 +488,14 @@ export const BackgroundModal = {
                         h('p', { class: 'bg-tip' }, '上传一张图片作为你的页面背景。这张背景只对你自己可见，其他账号看不到。'),
                         h('div', { class: 'bg-actions' }, [
                             h(Button, {
-                                class: 'sel-btn accent', Content: '选择图片',
+                                Style: 'AccentButtonStyle',
+                                Content: '选择图片',
+                                MinHeight: 32,
                                 onClick: () => document.getElementById('bg-input').click()
                             }),
                             h(Button, {
-                                class: 'sel-btn ghost', Content: '恢复默认',
+                                Content: '恢复默认',
+                                MinHeight: 32,
                                 onClick: () => import('./store.js').then(m => m.clearBackgroundAction())
                             })
                         ])
