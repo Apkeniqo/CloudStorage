@@ -910,3 +910,21 @@ proxy  = https://gh.dpik.top      # 默认值，可留空表示不用代理
 nodes = ['https://tvv.tw', 'https://gh.dpik.top', 'https://git.yylx.win', 'https://ghproxy.net']
 下载 4/4 完成，15.7s，坏节点：set()   ← 第一个节点就成功
 ```
+## beta 2026.1117.42 — 更新前节点测速，走最快的那个
+
+- 新增 `probe_nodes()`：并发（最多 8 线程）让每个节点拉一次 `version.py`，记录耗时
+- 结果按快慢排序，**选第一名作为本次更新的节点**；其余节点保留为后备（第一个中途失败会自动换下一个）
+- 测不通的节点直接计入 `_BAD_NODES`，本次不再尝试
+- 更新开始前打印测速表：
+
+```
+节点测速中（各拉一次 version.py）...
+  1. https://ghproxy.net      2.08s
+  2. https://git.yylx.win     2.14s
+  3. https://tvv.tw           2.36s
+选用节点：https://ghproxy.net（2.08s）
+```
+
+（`gh.dpik.top` 这一轮测速超时，被自动拉黑）
+
+注意：节点快慢会随网络波动，所以每次都重新测，不缓存上一次的结果。

@@ -19,6 +19,7 @@
 import argparse
 import base64
 import configparser
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -184,6 +185,34 @@ def fetch_via_proxy(proxies, repo, branch, path, timeout=20):
             last = e
             print('    节点 %s 不可用：%s' % (node, e))
     raise IOError('所有加速节点都失败：%s（%s）' % (path, last))
+
+
+def probe_nodes(proxies, repo, branch, timeout=12):
+    """并发测速：各节点拉一次 version.py，返回 [(node, seconds)]，按快慢排序。
+
+    失败的节点直接计入 _BAD_NODES，本次运行不再使用。
+    """
+    todo = [p for p in proxies if p not in _BAD_NODES]
+    if not todo:
+        return []
+
+    def one(node):
+        t0 = time.time()
+        try:
+            fetch_one_node(node, repo, branch, 'version.py', timeout)
+            return node, time.time() - t0
+        except Exception:
+            return node, None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(todo))) as pool:
+        results = list(pool.map(one, todo))
+
+    ok = [(n, sec) for n, sec in results if sec is not None]
+    for node, sec in results:
+        if sec is None:
+            _BAD_NODES.add(node)
+    ok.sort(key=lambda x: x[1])
+    return ok
 
 
 def fetch_remote_version(api, branch, proxies=None, repo=''):
@@ -467,8 +496,21 @@ def main():
 
     api = Api(repo, token)
     global _PROXY_LIST, _BAD_NODES
-    _PROXY_LIST = proxies
+    _PROXY_LIST = list(proxies)
     _BAD_NODES = set()
+
+    # 更新前先测速，挑最快的节点；测不通的直接拉黑
+    if _PROXY_LIST:
+        print('节点测速中（各拉一次 version.py）...')
+        ranked = probe_nodes(_PROXY_LIST, repo, branch)
+        if ranked:
+            for i, (node, sec) in enumerate(ranked, 1):
+                print('  %d. %-40s %.2fs' % (i, node, sec))
+            _PROXY_LIST = [n for n, _ in ranked]
+            print('选用节点：%s（%.2fs）' % (ranked[0][0], ranked[0][1]))
+        else:
+            print('  所有节点测速都失败，本次改走 api.github.com')
+            _PROXY_LIST = []
     try:
         remote = fetch_remote_version(api, branch, proxies, repo)
     except SystemExit:
