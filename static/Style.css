@@ -3229,3 +3229,32 @@ body.sidebar-collapsed .app-shell {
 .vue-main .file-list-container.view-grid .grid-wrap > .file-item {
     animation: rowEnter var(--duration-fast) var(--ease-standard) both;
 }
+/* ==================================================================
+   导航选中指示条：单一元素滑动（对齐 WinUI NavigationView）
+   ================================================================== */
+#winui-sidebar .side-nav {
+    position: relative;
+}
+
+#winui-sidebar .side-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--accent-base);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(0);
+    transition: transform var(--duration-normal) var(--ease-standard),
+                opacity var(--duration-fast) var(--ease-standard);
+    will-change: transform;
+}
+
+/* 旧的伪元素指示条停用，避免和滑动条重叠 */
+#winui-sidebar .side-item.active::before,
+#winui-sidebar .side-item::before {
+    display: none !important;
+    animation: none !important;
+}

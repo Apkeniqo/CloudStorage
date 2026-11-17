@@ -1,6 +1,6 @@
 // 组件：图标、侧边栏、工具栏、面包屑、文件列表、选择条、上传面板
 
-import { computed, h } from 'vue';
+import { computed, h, ref, watch, onMounted, nextTick } from 'vue';
 import { Button, TextBlock, TextBox, CheckBox, ProgressBar } from 'winuionweb';
 import {
     state, visibleFiles, selectedCount, allSelected,
@@ -82,6 +82,43 @@ export const Sidebar = {
             return list;
         });
 
+        const navRef = ref(null);
+        const indRef = ref(null);
+        const INDICATOR_H = 16;
+
+        // 把指示条移到当前选中项（animate=false 时直接落位，用于首次渲染）
+        function placeIndicator(animate) {
+            const nav = navRef.value;
+            const ind = indRef.value;
+            if (!nav || !ind) return;
+            const active = nav.querySelector('.side-item.active');
+            if (!active) {
+                ind.style.opacity = '0';
+                return;
+            }
+            const top = active.offsetTop + Math.max(0, (active.offsetHeight - INDICATOR_H) / 2);
+            if (!animate) ind.style.transition = 'none';
+            ind.style.transform = 'translateY(' + Math.round(top) + 'px)';
+            ind.style.opacity = '1';
+            if (!animate) {
+                void ind.offsetWidth;
+                requestAnimationFrame(() => { ind.style.transition = ''; });
+            }
+        }
+
+        onMounted(() => {
+            placeIndicator(false);
+            window.addEventListener('resize', () => placeIndicator(false));
+        });
+
+        watch(() => state.view, () => {
+            nextTick(() => placeIndicator(true));
+        });
+
+        watch(navs, () => {
+            nextTick(() => placeIndicator(false));
+        });
+
         return () => h('div', { class: 'win-theme-scope ' + (state.dark ? 'theme-dark' : 'theme-light'), style: 'display:contents' }, [
             h('div', { class: 'brand' }, [
                 h(WinIcon, { name: 'cloud', size: 22 }),
@@ -94,23 +131,27 @@ export const Sidebar = {
                     'onUpdate:Text': (v) => setSearch(v)
                 })
             ]),
-            h('nav', { class: 'side-nav' }, navs.value.map(n => h(Button, {
-                class: 'side-item' + (state.view === n.key ? ' active' : ''),
-                Background: 'transparent',
-                BorderThickness: 0,
-                Padding: '0 12px',
-                Height: 36,
-                MinHeight: 36,
-                onClick: () => {
-                    navTo(n.key);
-                    if (window.innerWidth <= 900 && typeof window.closeSidebar === 'function') {
-                        window.closeSidebar();
+            h('nav', { class: 'side-nav', ref: navRef }, [
+                ...navs.value.map(n => h(Button, {
+                    class: 'side-item' + (state.view === n.key ? ' active' : ''),
+                    Background: 'transparent',
+                    BorderThickness: 0,
+                    Padding: '0 12px',
+                    Height: 36,
+                    MinHeight: 36,
+                    onClick: () => {
+                        navTo(n.key);
+                        if (window.innerWidth <= 900 && typeof window.closeSidebar === 'function') {
+                            window.closeSidebar();
+                        }
                     }
-                }
-            }, () => h('span', { class: 'side-item-inner' }, [
-                h('span', { class: 'side-item-icon' }, [h(WinIcon, { name: n.icon, size: 18 })]),
-                h('span', { class: 'side-item-label' }, n.label)
-            ])))),
+                }, () => h('span', { class: 'side-item-inner' }, [
+                    h('span', { class: 'side-item-icon' }, [h(WinIcon, { name: n.icon, size: 18 })]),
+                    h('span', { class: 'side-item-label' }, n.label)
+                ]))),
+                // 单一指示条：切换时在选项之间滑动
+                h('i', { class: 'side-indicator', ref: indRef })
+            ]),
             h('div', { class: 'side-bottom' }, [
                 h('div', { class: 'side-storage' }, [
                     h('div', { class: 'side-storage-title' }, '存储'),
