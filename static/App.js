@@ -318,8 +318,11 @@ async function loadFiles(path, opts) {
         rawFilesData = data.items || [];
         if (!opts.keepSearch) {
             searchQuery = '';
-            const s = document.getElementById('search-input');
-            if (s) s.value = '';
+            if (window.WinUIShell) window.WinUIShell.setSearch('');
+            else {
+                const s = document.getElementById('search-input');
+                if (s) s.value = '';
+            }
         }
         selectedPaths.clear();
         renderBreadcrumb();
@@ -352,6 +355,9 @@ function updateActiveNav() {
     document.querySelectorAll('.side-item[data-nav]').forEach(el => {
         el.classList.toggle('active', el.dataset.nav === currentView_nav);
     });
+    if (window.WinUIShell && window.WinUIShell.setActiveNav) {
+        window.WinUIShell.setActiveNav(currentView_nav);
+    }
     moveSideIndicator();
 }
 
@@ -386,8 +392,10 @@ function showAdmin() {
     updateActiveNav();
     playViewAnimation();
 
-    const input = document.getElementById('search-input');
-    if (input && input.value) {
+    const searchText = window.WinUIShell
+        ? window.WinUIShell.getSearch()
+        : (document.getElementById('search-input') || {}).value;
+    if (searchText) {
         const frame = document.getElementById('admin-frame');
         if (frame) {
             frame.addEventListener('load', function once() {
@@ -443,8 +451,11 @@ async function loadTrash() {
             is_trash: true
         }));
         searchQuery = '';
-        const s = document.getElementById('search-input');
-        if (s) s.value = '';
+        if (window.WinUIShell) window.WinUIShell.setSearch('');
+        else {
+            const s = document.getElementById('search-input');
+            if (s) s.value = '';
+        }
         selectedPaths.clear();
         renderBreadcrumb();
         renderFileList();
@@ -517,6 +528,8 @@ async function emptyTrash() {
 window.syncShell = function () {
     try {
         if (window.WinUIShell) {
+            if (window.WinUIShell.setActiveNav) window.WinUIShell.setActiveNav(currentView_nav);
+            if (window.WinUIShell.setSearch) window.WinUIShell.setSearch(searchQuery || '');
             if (window.WinUIShell.setViewMode) window.WinUIShell.setViewMode(currentView);
             if (window.WinUIShell.setTrashMode) window.WinUIShell.setTrashMode(currentView_nav === 'trash');
             if (window.WinUIShell.setTheme) {
@@ -525,6 +538,8 @@ window.syncShell = function () {
             }
         }
         updateClipboardButtons();
+        // 组件挂载后再拉一次用量，让侧栏存储条有数据
+        updateStorageInfo();
     } catch (e) {
         console.warn('同步组件外壳状态失败：', e);
     }
@@ -644,6 +659,20 @@ async function updateStorageInfo() {
 
         if (fill) {
             fill.style.width = Math.min(100, percent).toFixed(1) + '%';
+        }
+
+        if (window.WinUIShell && window.WinUIShell.setStorage) {
+            let text = '已使用 ' + formatSize(used);
+            let title = '';
+            if (info.mode === 'quota') {
+                text = '已用 ' + formatSize(used) + ' / ' + formatSize(info.limit || 0)
+                    + ' (' + Math.round(percent) + '%)';
+                title = '剩余 ' + formatSize(info.remaining || 0);
+            } else if (info.mode === 'disk') {
+                text = '已用 ' + formatSize(used) + ' · 磁盘剩余 ' + formatSize(info.remaining || 0);
+                title = '磁盘共 ' + formatSize(info.disk_total || 0) + '，剩余 ' + formatSize(info.remaining || 0);
+            }
+            window.WinUIShell.setStorage({ text: text, title: title, percent: percent });
         }
         if (text) {
             if (info.mode === 'quota') {
@@ -900,6 +929,9 @@ function adminFrameWindow() {
 }
 
 function handleSearch(query) {
+    if (window.WinUIShell && window.WinUIShell.getSearch() !== query) {
+        window.WinUIShell.setSearch(query);
+    }
     const clearBtn = document.getElementById('clear-search');
     const hasText = !!(query && query.trim());
     if (clearBtn) clearBtn.style.display = hasText ? 'inline-block' : 'none';
@@ -924,11 +956,22 @@ function focusSearch() {
         el.classList.add('open');
         document.body.classList.add('sidebar-open');
     }
+    if (window.WinUIShell) { window.WinUIShell.focusSearch(); return; }
     const input = document.getElementById('search-input');
     if (input) input.focus();
 }
 
 function clearSearch() {
+    if (window.WinUIShell) {
+        window.WinUIShell.setSearch('');
+        if (currentView_nav === 'admin') {
+            const win = adminFrameWindow();
+            if (win && typeof win.clearConfigSearch === 'function') win.clearConfigSearch();
+        }
+        handleSearch('');
+        window.WinUIShell.focusSearch();
+        return;
+    }
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = '';

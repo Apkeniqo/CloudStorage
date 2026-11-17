@@ -384,3 +384,15 @@
 - 按钮点击直接调用原有全局函数（`createFolder` / `toggleViewMode` / `copySelection` / `pasteSelection` / `toggleTheme` / `emptyTrash` / `toggleMoreMenu`），文件列表、上传、拖拽逻辑零改动
 - 视图切换按钮的图标随当前视图变化（列表↔图标），主题按钮图标随明暗切换
 - 实测：点击组件按钮后 `file-list-container` 的类正确切换到 `view-grid`，说明事件与桥接都生效
+## beta 2026.1117.3 — 侧边栏改用 winuionweb 组件
+
+侧边栏整体改为 Vue + 组件库渲染（`static/shell.js` 新增 Sidebar 组件）：
+
+- **品牌**：组件图标 + `TextBlock`，用户名从 `body[data-username]` 注入
+- **搜索**：`TextBox` 组件，onUpdate:Text 直接调 `handleSearch`；`WinUIShell` 暴露 `getSearch / setSearch / focusSearch`，App.js 里原 `#search-input` 的 5 处读写改为走桥接（保留原生 fallback）
+- **导航**：4 个 `Button` 组件（主页 / 我的文件 / 回收站 / 管理后台），`setActiveNav` 驱动选中态与左侧 3×16 强调条；管理员项按 `body[data-admin]` 决定是否渲染
+- **存储**：`setStorage` 桥接文字、tooltip 与进度百分比（原 `updateStorageInfo` 计算后同步）
+- **底部**：背景 / 退出登录用 `Button` 组件，点击调用原全局函数
+- `syncShell()` 在组件挂载后回灌导航、搜索关键词、视图模式、主题、剪贴板状态与存储用量
+
+配合上一版的工具栏，**主界面的外壳（侧边栏 + 工具栏）已全部由组件库渲染**，文件列表与后台页仍为原生实现。

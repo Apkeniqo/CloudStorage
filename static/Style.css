@@ -2610,3 +2610,138 @@ html.theme-switching *::after {
     opacity: 0.4;
     pointer-events: none;
 }
+/* ==================================================================
+   winuionweb 侧边栏组件适配
+   ================================================================== */
+#winui-sidebar .side-item {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px;
+    width: 100%;
+    min-height: 36px !important;
+    height: 36px !important;
+    padding: 0 12px !important;
+    margin: 0;
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    border-radius: var(--ControlCornerRadius) !important;
+    color: var(--text-primary) !important;
+    font-size: var(--ControlContentThemeFontSize) !important;
+    font-weight: 400 !important;
+    text-align: left;
+    box-shadow: none !important;
+}
+
+#winui-sidebar .side-item:hover {
+    background: var(--subtle-secondary) !important;
+}
+
+#winui-sidebar .side-item.active {
+    background: var(--subtle-secondary) !important;
+    color: var(--accent-base) !important;
+    font-weight: 600 !important;
+}
+
+#winui-sidebar .side-item.active .side-item-icon svg {
+    fill: var(--accent-base);
+}
+
+#winui-sidebar .side-item-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-secondary);
+}
+
+#winui-sidebar .side-item.active .side-item-icon {
+    color: var(--accent-base);
+}
+
+#winui-sidebar .side-item-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 选中指示条（WinUI NavigationView 3×16） */
+#winui-sidebar .side-item {
+    position: relative;
+}
+
+#winui-sidebar .side-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--accent-base);
+    transform: translateY(-50%);
+}
+
+#winui-sidebar .side-search {
+    padding: 0 2px 8px;
+}
+
+#winui-sidebar .side-search .win-text-box,
+#winui-sidebar .side-search > div {
+    width: 100%;
+}
+
+#winui-sidebar .side-storage {
+    padding: 6px 10px 2px;
+}
+/* 侧栏组件内部：图标 + 文字横排，去掉按钮默认底板 */
+#winui-sidebar .side-item {
+    display: block !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    width: 100% !important;
+}
+
+#winui-sidebar .side-item > div,
+#winui-sidebar .side-item > span {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 0 12px !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+}
+
+#winui-sidebar .side-item-inner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 100%;
+}
+
+/* 搜索框：占满宽度、去掉额外内边距 */
+#winui-sidebar .side-search > div,
+#winui-sidebar .side-search .win-text-box {
+    width: 100% !important;
+}
+/* 侧栏组件：内部所有层去掉按钮默认底板，只保留我们自己的选中态 */
+#winui-sidebar .side-item *,
+#winui-sidebar .side-item > div,
+#winui-sidebar .side-item > div > div {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+#winui-sidebar .side-item *:hover {
+    background: transparent !important;
+}
