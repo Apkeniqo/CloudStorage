@@ -104,6 +104,12 @@ export function applyTheme() {
     requestAnimationFrame(() => {
         document.documentElement.classList.remove('theme-switching');
     });
+    // 兜底：万一 rAF 没执行（页面不可见等），别让过渡被永久禁用
+    setTimeout(() => {
+        document.documentElement.classList.remove('theme-switching');
+    }, 200);
+
+    syncFrameVars();
 }
 
 export function toggleTheme() {
@@ -403,6 +409,8 @@ export function syncFrameVars() {
     try { doc = fr.contentDocument; } catch (e) { return; }
     if (!doc || !doc.documentElement) return;
     const root = doc.documentElement;
+    // 主题跟随主界面（iframe 只在加载时读过一次 localStorage）
+    root.setAttribute('data-theme', state.dark ? 'dark' : 'light');
     root.style.setProperty('--bg-opacity', String(state.bgOpacity / 100));
     root.style.setProperty('--panel-alpha', state.panelOpacity + '%');
     root.style.setProperty('--panel-blur', state.blurPanel + 'px');

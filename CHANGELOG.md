@@ -723,3 +723,17 @@ JS 端写变量时改成 `--panel-alpha: 40%`（原来是 `0.4`）。`--bg-opaci
 - 修掉一个连带错误：改成底部按钮时误用了不存在的 `navButton()` 函数，导致整个侧栏渲染中断（页面只剩主内容），已改为内联渲染
 
 实测侧栏条目顺序：`主页 / 我的文件 / 回收站 / 背景 / 管理后台 / 退出登录`
+## beta 2026.1117.32 — 切换主题时后台跟着换
+
+**原因**：后台是 iframe，属于独立文档，只在**首次加载**时读过一次 `localStorage.fluent_theme`；之后主界面怎么切主题，iframe 里的 `data-theme` 都不会变，所以后台一直停在旧主题。
+
+**修法**：`syncFrameVars()` 里同时写入 `data-theme`，并在 `applyTheme()` 末尾调用它——切换主题后立刻把 iframe 的 `data-theme`、`--panel-alpha`、`--panel-blur` 全量重灌一遍。
+
+另外给 `theme-switching` 类加了 200ms 兜底移除（万一 `requestAnimationFrame` 没执行，过渡不会被永久禁用）。
+
+实测：
+
+```
+切换前  主界面 dark   iframe dark
+切换后  主界面 light  iframe light   卡片背景 color(srgb 1 1 1 / 0.702)
+```
