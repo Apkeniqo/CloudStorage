@@ -1,9 +1,9 @@
 // 应用入口：组装根组件、上传、拖拽、实时刷新
 
 import { createApp, h, watch, onMounted, nextTick, Teleport } from 'vue';
-import WinUIOnWeb, { Button } from 'winuionweb';
+import WinUIOnWeb from 'winuionweb';
 import {
-    state, init, reload, visibleFiles, formatTime, loadFiles,
+    state, init, reload, visibleFiles, formatTime,
     uploadBackgroundFile, toast
 } from './store.js';
 import { addFiles } from './upload.js';
@@ -18,6 +18,16 @@ const App = {
         watch(() => state.view, (v) => {
             document.body.classList.toggle('trash-mode', v === 'trash');
             document.body.classList.toggle('admin-mode', v === 'admin');
+            if (v === 'admin') {
+                state.adminOpened = true;
+                // iframe 首次才会真正加载，之后复用，不再白闪
+                nextTick(() => {
+                    const fr = document.getElementById('admin-frame');
+                    if (fr && fr.getAttribute('src') !== '/admin?embed=1') {
+                        fr.setAttribute('src', '/admin?embed=1');
+                    }
+                });
+            }
         }, { immediate: true });
 
         watch(() => state.showBackground, (open) => {
@@ -37,35 +47,26 @@ const App = {
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),
 
-            // 管理后台：嵌在主内容区里显示（侧栏与工具栏保持可见）
-            state.view === 'admin'
-                ? h('div', { class: 'admin-view' }, [
-                    h('div', { class: 'admin-bar' }, [
-                        h(Button, {
-                            class: 'admin-back',
-                            Content: '← 返回文件列表',
-                            onClick: () => {
-                                state.view = 'files';
-                                state.crumbs = [{ name: '主页', path: '' }];
-                                loadFiles('');
-                            }
-                        }),
-                        h('span', { class: 'admin-title' }, '管理后台')
-                    ]),
-                    h('iframe', {
-                        id: 'admin-frame',
-                        class: 'admin-frame',
-                        src: '/admin?embed=1',
-                        title: '管理后台'
-                    })
-                ])
-                : h('div', {
-                    class: 'file-list-container ' + (state.viewMode === 'grid' ? 'view-grid' : 'view-list'),
-                    id: 'file-container'
-                }, [
-                    h(FileList),
-                    h(SelectionBar)
-                ]),
+            // 文件区域（切到后台时隐藏，但保留 DOM）
+            h('div', {
+                class: 'file-list-container '
+                    + (state.viewMode === 'grid' ? 'view-grid' : 'view-list')
+                    + (state.view === 'admin' ? ' is-hidden' : ''),
+                id: 'file-container'
+            }, [
+                h(FileList),
+                h(SelectionBar)
+            ]),
+
+            // 管理后台：占文件列表的位置，常驻 iframe（不重建，避免白闪）
+            h('div', { class: 'admin-view' + (state.view === 'admin' ? ' show' : '') }, [
+                h('iframe', {
+                    id: 'admin-frame',
+                    class: 'admin-frame',
+                    src: state.adminOpened ? '/admin?embed=1' : 'about:blank',
+                    title: '管理后台'
+                })
+            ]),
 
             state.view === 'admin'
                 ? null

@@ -3330,16 +3330,23 @@ body.sidebar-collapsed .app-shell {
     position: relative;
 }
 
-/* 管理后台：嵌在主内容区（侧栏、工具栏照常可见） */
+/* 管理后台：占文件列表的位置，显示/隐藏切换 + 与列表相同的进入动画 */
+.vue-main .file-list-container.is-hidden {
+    display: none;
+}
+
 .admin-view {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.admin-view.show {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    background: var(--bg-color, #202020);
-    box-sizing: border-box;
+    animation: vueViewEnter var(--duration-normal) var(--ease-standard) both;
 }
 
 .admin-bar {
@@ -3368,8 +3375,8 @@ body.sidebar-collapsed .app-shell {
     width: 100%;
     min-height: 0;
     border: 0;
-    border-radius: var(--OverlayCornerRadius);
-    background: var(--card-bg);
+    border-radius: 0;
+    background: transparent;
     display: block;
 }
 

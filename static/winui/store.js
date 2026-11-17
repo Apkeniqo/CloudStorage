@@ -47,6 +47,9 @@ export const state = reactive({
     storage: { text: '', title: '', percent: 0 },
     version: '',
 
+    // 后台 iframe 是否已加载过（避免每次切换都重建导致白闪）
+    adminOpened: false,
+
     // 弹层
     showShares: false,
     shares: [],
