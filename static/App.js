@@ -252,6 +252,11 @@ function applyTheme() {
         moonIcon.style.display = activeTheme === 'dark' ? 'none' : 'inline-block';
     }
 
+    // 工具栏由 WinUI 组件渲染，图标跟随主题
+    if (window.WinUIShell && window.WinUIShell.setTheme) {
+        window.WinUIShell.setTheme(activeTheme === 'dark');
+    }
+
     if (changed) {
         // 强制一次样式计算后立即恢复过渡，使本次切换不产生渐变动画
         void root.offsetWidth;
@@ -400,6 +405,11 @@ function showAdmin() {
 function setMode(mode) {
     const isTrash = mode === 'trash';
     document.body.classList.toggle('trash-mode', isTrash);
+
+    if (window.WinUIShell && window.WinUIShell.setTrashMode) {
+        window.WinUIShell.setTrashMode(isTrash);
+        if (window.WinUIShell.setClipboard) window.WinUIShell.setClipboard({ hasSel: false, hasClip: false, mode: '' });
+    }
     document.body.classList.toggle('admin-mode', mode === 'admin');
     const delBtn = document.getElementById('sel-delete');
     if (delBtn) delBtn.textContent = isTrash ? '彻底删除' : '删除';
@@ -502,6 +512,23 @@ async function emptyTrash() {
         alert('清空失败：' + e);
     }
 }
+
+// 组件外壳挂载完成后，把当前状态同步过去
+window.syncShell = function () {
+    try {
+        if (window.WinUIShell) {
+            if (window.WinUIShell.setViewMode) window.WinUIShell.setViewMode(currentView);
+            if (window.WinUIShell.setTrashMode) window.WinUIShell.setTrashMode(currentView_nav === 'trash');
+            if (window.WinUIShell.setTheme) {
+                const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                window.WinUIShell.setTheme(dark);
+            }
+        }
+        updateClipboardButtons();
+    } catch (e) {
+        console.warn('同步组件外壳状态失败：', e);
+    }
+};
 
 function toggleSidebar() {
     const el = document.getElementById('sidebar');
@@ -641,6 +668,11 @@ function setViewMode(mode, save = true) {
 
     if (fileContainer) {
         fileContainer.className = `file-list-container view-${mode}`;
+    }
+
+    // 工具栏由 WinUI 组件渲染，图标随视图变化
+    if (window.WinUIShell && window.WinUIShell.setViewMode) {
+        window.WinUIShell.setViewMode(mode);
     }
 
     // 单个切换按钮：显示「将要切换到的视图」的图标
@@ -1292,6 +1324,10 @@ function updateClipboardButtons() {
     const inTrash = currentView_nav === 'trash';
     const hasSel = selectedPaths.size > 0 && !inTrash;
     const hasClip = clipboard.paths.length > 0 && !inTrash;
+
+    if (window.WinUIShell && window.WinUIShell.setClipboard) {
+        window.WinUIShell.setClipboard({ hasSel: hasSel, hasClip: hasClip, mode: clipboard.mode });
+    }
     if (copyBtn) copyBtn.disabled = !hasSel;
     if (cutBtn) cutBtn.disabled = !hasSel;
     if (pasteBtn) {

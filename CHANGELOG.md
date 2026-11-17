@@ -374,3 +374,13 @@
   - 增加了 `<noscript>` 回退与「组件加载失败回退到基础表单」兜底
 - 新增 `/static/winui-demo.html` 组件样例页，可直接查看 Button / TextBox / CheckBox / ToggleSwitch / ComboBox / Slider / ProgressBar / InfoBar 的实际渲染
 - 说明：文件列表、工具栏、后台页面仍由现有实现渲染，后续可按页面逐步迁移（列表涉及上传/拖拽/多选，需单独排期）
+## beta 2026.1117.2 — 工具栏改用 winuionweb 组件
+
+主界面的工具栏从手写 HTML 改为 Vue + winuionweb 组件渲染，逻辑仍由原 App.js 驱动：
+
+- 新增 `static/shell.js`：用组件库渲染 6 个图标按钮（新建文件夹 / 视图切换 / 复制 / 剪切 / 粘贴 / 主题）、上传 AccentButton、清空回收站、移动端「更多」
+- 引入 `importmap`（vue / winuionweb / mathlive 垫片），首页免构建加载组件库
+- **状态桥接**：`window.WinUIShell` 暴露 `setViewMode` / `setTheme` / `setTrashMode` / `setClipboard`，App.js 在切换视图、换主题、进出回收站、选择变化时同步过去；组件挂载后调用 `window.syncShell()` 回灌一次当前状态
+- 按钮点击直接调用原有全局函数（`createFolder` / `toggleViewMode` / `copySelection` / `pasteSelection` / `toggleTheme` / `emptyTrash` / `toggleMoreMenu`），文件列表、上传、拖拽逻辑零改动
+- 视图切换按钮的图标随当前视图变化（列表↔图标），主题按钮图标随明暗切换
+- 实测：点击组件按钮后 `file-list-container` 的类正确切换到 `view-grid`，说明事件与桥接都生效
