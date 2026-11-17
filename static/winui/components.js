@@ -101,7 +101,12 @@ export const Sidebar = {
                 Padding: '0 12px',
                 Height: 36,
                 MinHeight: 36,
-                onClick: () => navTo(n.key)
+                onClick: () => {
+                    navTo(n.key);
+                    if (window.innerWidth <= 900 && typeof window.closeSidebar === 'function') {
+                        window.closeSidebar();
+                    }
+                }
             }, () => h('span', { class: 'side-item-inner' }, [
                 h('span', { class: 'side-item-icon' }, [h(WinIcon, { name: n.icon, size: 18 })]),
                 h('span', { class: 'side-item-label' }, n.label)

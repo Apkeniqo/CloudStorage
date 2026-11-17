@@ -190,14 +190,23 @@ if (document.readyState === 'loading') {
     mount();
 }
 
-// 侧边栏抽屉（移动端）
+// 侧边栏：桌面折叠 / 移动端抽屉
 window.toggleSidebar = function () {
+    const narrow = window.innerWidth <= 900;
     const el = document.getElementById('sidebar');
-    const mask = document.getElementById('sidebar-mask');
     if (!el) return;
-    const open = el.classList.toggle('open');
-    if (mask) mask.classList.toggle('show', open);
-    document.body.classList.toggle('sidebar-open', open);
+
+    if (narrow) {
+        const open = el.classList.toggle('open');
+        const mask = document.getElementById('sidebar-mask');
+        if (mask) mask.classList.toggle('show', open);
+        document.body.classList.toggle('sidebar-open', open);
+        return;
+    }
+
+    // 桌面：整列收起/展开
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    try { localStorage.setItem('fluent_sidebar', collapsed ? '0' : '1'); } catch (e) {}
 };
 
 window.closeSidebar = function () {
@@ -207,3 +216,21 @@ window.closeSidebar = function () {
     if (mask) mask.classList.remove('show');
     document.body.classList.remove('sidebar-open');
 };
+
+// 窄屏点击导航后自动收起抽屉
+window.addEventListener('resize', function () {
+    if (window.innerWidth > 900) {
+        document.body.classList.remove('sidebar-open');
+        const el = document.getElementById('sidebar');
+        if (el) el.classList.remove('open');
+        const mask = document.getElementById('sidebar-mask');
+        if (mask) mask.classList.remove('show');
+    }
+});
+
+// 恢复上次的折叠状态（桌面）
+try {
+    if (localStorage.getItem('fluent_sidebar') === '0' && window.innerWidth > 900) {
+        document.body.classList.add('sidebar-collapsed');
+    }
+} catch (e) {}

@@ -3110,3 +3110,35 @@ html.theme-switching *::after {
 .grid-wrap .grid-actions {
     margin-top: auto;
 }
+/* ==================================================================
+   侧边栏开关：桌面折叠 / 移动端抽屉
+   ================================================================== */
+/* 汉堡按钮在所有宽度都显示 */
+.sidebar-toggle {
+    display: inline-flex;
+}
+
+/* 桌面折叠：整列隐藏，主内容区自动铺满 */
+body.sidebar-collapsed .sidebar {
+    display: none;
+}
+
+body.sidebar-collapsed .app-shell {
+    padding-left: 0;
+}
+
+@media (max-width: 900px) {
+    /* 窄屏始终用抽屉，不受桌面折叠状态影响 */
+    body.sidebar-collapsed .sidebar {
+        display: flex;
+        transform: translateX(-100%);
+    }
+
+    body.sidebar-collapsed .sidebar.open {
+        transform: translateX(0);
+    }
+
+    body.sidebar-collapsed .app-shell {
+        padding-left: 0;
+    }
+}
