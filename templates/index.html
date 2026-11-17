@@ -6,11 +6,9 @@
     <meta name="theme-color" content="#0078d4">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>文件存储 - CloudStorage</title>
-    <!-- Socket.IO Client CDN -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <link rel="stylesheet" href="/static/vendor/winuionweb/style.css">
     <link rel="stylesheet" href="/static/Style.css">
-    <script src="/static/App.js"></script>
     <script type="importmap">
     {
       "imports": {
@@ -20,176 +18,48 @@
       }
     }
     </script>
-    <script type="module" src="/static/shell.js"></script>
+    <script type="module" src="/static/winui/main.js"></script>
     <style>
-        /* WinUI 组件挂载点：让组件直接参与父容器的布局 */
-        #winui-toolbar,
+        /* 组件挂载点：让组件直接参与父容器布局 */
         #winui-sidebar { display: contents; }
+        #winui-toolbar { display: contents; }
     </style>
 </head>
-<body class="app-body" data-username="{{ username or '我的云盘' }}" data-admin="{{ '1' if is_admin else '0' }}">
+<body class="app-body">
 
     <div class="app-shell">
-        <!-- 侧边栏（模仿 OneDrive 网页版） -->
         <aside class="sidebar" id="sidebar">
             <button class="sidebar-close" onclick="closeSidebar()" title="关闭菜单">✕</button>
             <div id="winui-sidebar"></div>
         </aside>
 
-        <!-- 移动端侧边栏遮罩 -->
         <div class="sidebar-mask" id="sidebar-mask" onclick="closeSidebar()"></div>
 
         <main class="main-pane">
-        <div class="container" id="app-container">
-        <!-- Top Progress Bar -->
-        <div class="progress-bar" id="progress-bar">
-            <div class="progress-inner" id="progress-inner"></div>
-        </div>
+            <div class="container" id="app-container">
+                <div class="header">
+                    <button class="btn-icon sidebar-toggle" onclick="toggleSidebar()" title="侧边栏">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                    </button>
 
-        <!-- Header Controls -->
-        <div class="header">
-            <button class="btn-icon sidebar-toggle" onclick="toggleSidebar()" title="侧边栏">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
-            </button>
-
-            <div class="toolbar">
-                <div id="winui-toolbar"></div>
-                <input type="file" id="file-input" multiple onchange="uploadFiles()" style="display: none;">
-                <input type="file" id="bg-input" accept="image/*" style="display: none;" onchange="uploadBackground(this)">
-            </div>
-        </div>
-
-        <!-- 标题行：路径 -->
-        <div class="title-row">
-            <nav class="breadcrumb" id="breadcrumb"></nav>
-        </div>
-
-        <!-- File List Content Container -->
-        <div class="file-list-container view-list" id="file-container">
-            <div class="file-header">
-                <div class="col-check">
-                    <input type="checkbox" id="select-all" title="全选">
-                </div>
-                <div>
-                    <span class="sortable-col" onclick="handleHeaderClick('name')">
-                        名称 <span id="sort-icon-name" class="sort-arrow"></span>
-                    </span>
-                </div>
-                <div>
-                    <span class="sortable-col" onclick="handleHeaderClick('size')">
-                        大小 <span id="sort-icon-size" class="sort-arrow"></span>
-                    </span>
-                </div>
-                <div class="file-time">
-                    <span class="sortable-col" onclick="handleHeaderClick('mtime')">
-                        修改时间 <span id="sort-icon-mtime" class="sort-arrow"></span>
-                    </span>
-                </div>
-                <div style="text-align: right;">操作</div>
-            </div>
-
-            <div class="selection-bar" id="selection-bar">
-                <span class="selection-count">已选 <b id="selection-num">0</b> 项</span>
-                <span class="selection-actions">
-                    <button class="sel-btn" id="sel-delete" onclick="deleteSelected()">删除</button>
-                    <button class="sel-btn ghost" onclick="clearSelection()">取消</button>
-                </span>
-            </div>
-
-            <div id="file-items-wrapper">
-                <div class="empty-state">正在同步文件列表...</div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="status-bar">
-            <span id="status-text">实时连接中...</span>
-            <span id="file-count">0 项</span>
-        </div>
-    </div>
-
-        <!-- 管理后台（同页展示，避免跳转） -->
-        <div class="admin-panel" id="admin-panel">
-            <iframe id="admin-frame" title="管理后台"></iframe>
-        </div>
-    </main>
-    </div>
-
-        <!-- 共享链接管理 -->
-        <div class="modal-mask" id="shares-modal">
-            <div class="modal-card">
-                <div class="modal-head">
-                    <span>共享链接</span>
-                    <button class="modal-close" onclick="closeShares()">✕</button>
-                </div>
-                <div class="modal-body" id="shares-list">加载中…</div>
-            </div>
-        </div>
-
-        <!-- 个人背景 -->
-        <div class="modal-mask" id="bg-modal">
-            <div class="modal-card bg-card">
-                <div class="modal-head">
-                    <span>个人背景</span>
-                    <button class="modal-close" onclick="closeBackground()">✕</button>
-                </div>
-                <div class="modal-body">
-                    <p class="bg-tip">上传一张图片作为你的页面背景。<br>这张背景只对你自己可见，其他账号看不到。</p>
-                    <div class="bg-actions">
-                        <button class="sel-btn accent" onclick="document.getElementById('bg-input').click()">选择图片</button>
-                        <button class="sel-btn ghost" onclick="clearBackground()">恢复默认</button>
-                    </div>
-
-                    <div class="bg-slider-row">
-                        <label>文件区域模糊 <span class="val" id="val-panel">24px</span></label>
-                        <input type="range" id="blur-panel" min="0" max="40" step="1" value="24"
-                               oninput="onBlurInput('panel', this.value)">
-                    </div>
-
-                    <div class="bg-slider-row">
-                        <label>背景模糊 <span class="val" id="val-bg">0px</span></label>
-                        <input type="range" id="blur-bg" min="0" max="30" step="1" value="0"
-                               oninput="onBlurInput('bg', this.value)">
+                    <div class="toolbar">
+                        <div id="winui-toolbar"></div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- 拖拽上传提示层 -->
-        <div class="drop-overlay" id="drop-overlay">
-            <div class="drop-card">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="var(--accent-color)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
-                <div class="drop-title">松开鼠标即可上传</div>
-                <div class="drop-sub">支持多个文件，文件夹会被忽略</div>
+                <div id="winui-app"></div>
             </div>
-        </div>
-
-    <!-- 上传进度弹窗 -->
-    <!-- <div id="upload-toast" class="upload-toast hidden">
-        <div class="toast-header">
-            <span class="toast-title" id="toast-file-name">正在上传文件...</span>
-            <button class="toast-close-btn" onclick="cancelUpload()" title="取消/中断上传">✕</button>
-        </div>
-        <div class="toast-body">
-            <div class="toast-progress-bar">
-                <div id="toast-progress-inner" class="toast-progress-inner" style="width: 0%;"></div>
-            </div>
-            <div class="toast-meta">
-                <span id="toast-percent">0%</span>
-                <span id="toast-speed">0 KB/s</span>
-            </div>
-        </div>
-    </div> -->
-
-    <div id="upload-toast" class="upload-toast hidden">
-        <div class="toast-header">
-            <span class="toast-title" id="toast-title">正在上传文件 (0/0)</span>
-            <button class="toast-close-btn" onclick="cancelAllUploads()" title="全部取消">✕</button>
-        </div>
-        <!-- 多文件上传卡片容器 -->
-        <div id="upload-list-container" class="upload-list-container">
-            <!-- 动态生成的单文件上传项 -->
-        </div>
+        </main>
     </div>
+
+    <!-- 隐藏的原生控件：由组件按钮触发 -->
+    <input type="file" id="file-input" multiple style="display:none">
+    <input type="file" id="bg-input" accept="image/*" style="display:none">
+
+    <noscript>
+        <div style="padding:24px;font-family:Segoe UI,sans-serif">
+            该页面需要启用 JavaScript 才能使用。
+        </div>
+    </noscript>
 </body>
 </html>

@@ -396,3 +396,23 @@
 - `syncShell()` 在组件挂载后回灌导航、搜索关键词、视图模式、主题、剪贴板状态与存储用量
 
 配合上一版的工具栏，**主界面的外壳（侧边栏 + 工具栏）已全部由组件库渲染**，文件列表与后台页仍为原生实现。
+## beta 2026.1117.4 — 主界面重写为 Vue 应用（去掉桥接）
+
+按需求不再用「原 DOM + 桥接」的混合模式，主界面整体重写为 Vue 3 应用，全部由 winuionweb 组件渲染：
+
+**新结构（static/winui/）**
+- `api.js`：后端接口封装（列表 / 文件操作 / 分享 / 背景 / 模糊 / 用量）
+- `store.js`：响应式状态与业务动作（导航、排序、搜索、多选、剪贴板、回收站、分享、主题、背景）
+- `upload.js`：上传逻辑移植（小文件直传 + 大文件分片、CRC Worker 校验、4 并发、断点续传、合并轮询、取消）
+- `components.js`：Sidebar / Toolbar / Breadcrumb / FileList（列表 + 网格）/ SelectionBar / UploadPanel / ShareModal / BackgroundModal / ToastBar
+- `main.js`：挂载、上传选择器、拖拽上传、Socket 实时刷新、移动端抽屉
+
+**删除的旧实现**
+- `static/App.js`（约 1400 行 DOM 操作）、`static/shell.js`（上一版的桥接外壳）、`static/App1.js`、`static/App2.js`
+- `templates/index.html` 只剩骨架与挂载点，不再引用任何旧脚本
+
+**行为说明**
+- 文件操作全部走同一套 API，列表、排序、搜索、多选、复制/剪切/粘贴、重命名、删除、回收站、分享、隐藏与原版一致
+- 大文件上传仍走分片 + 断点续传 + CRC 校验，进度与速度显示在右下角上传面板
+- 拖拽上传、Socket 实时刷新保留
+- 主题、背景图、模糊参数从 `/auth/me` 与 `/prefs/*` 读写，与之前一致
