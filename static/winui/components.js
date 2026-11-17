@@ -272,8 +272,11 @@ export const FileList = {
                     state.search ? '没有匹配的文件' : '这个文件夹是空的，点击上传或拖入文件');
             }
 
+            // 视图/路径变化时重建内容，触发 WinUI Entrance 动画
+            const viewKey = state.view + '|' + state.path;
+
             if (state.viewMode === 'grid') {
-                return h('div', { class: 'grid-wrap' }, files.map(f => {
+                return h('div', { class: 'grid-wrap', key: 'g:' + viewKey }, files.map(f => {
                     const path = f.path || f.name;
                     return h('div', {
                         class: 'file-item' + (f.is_dir ? ' is-dir' : '') + (state.selected.includes(path) ? ' selected' : ''),
@@ -293,7 +296,7 @@ export const FileList = {
                 }));
             }
 
-            return h('div', { class: 'list-wrap' }, [
+            return h('div', { class: 'list-wrap', key: 'l:' + viewKey }, [
                 h('div', { class: 'file-header' }, [
                     h('div', { class: 'col-check' }, [
                         h('input', {

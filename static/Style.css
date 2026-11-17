@@ -3150,3 +3150,82 @@ body.sidebar-collapsed .app-shell {
         padding-left: 0;
     }
 }
+/* ==================================================================
+   选项卡切换动效（对齐 WinUI NavigationView / EntranceThemeTransition）
+   ================================================================== */
+
+/* 内容区进入：淡入 + 12px 上移，250ms FastOutSlowIn */
+@keyframes vueViewEnter {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.vue-main .list-wrap,
+.vue-main .grid-wrap {
+    animation: vueViewEnter var(--duration-normal) var(--ease-standard) both;
+}
+
+/* 导航项：文字与图标颜色渐变（167ms） */
+#winui-sidebar .side-item,
+#winui-sidebar .side-item-label,
+#winui-sidebar .side-item-icon,
+#winui-sidebar .side-item-icon svg {
+    transition: color var(--duration-fast) var(--ease-standard),
+                background-color var(--duration-fast) var(--ease-standard),
+                fill var(--duration-fast) var(--ease-standard);
+}
+
+/* 选中指示条：出现时从 20% 高度拉伸到满高（WinUI 的 selection indicator） */
+@keyframes navIndicatorIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50%) scaleY(0.2);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(-50%) scaleY(1);
+    }
+}
+
+#winui-sidebar .side-item.active::before {
+    animation: navIndicatorIn var(--duration-fast) var(--ease-standard) both;
+}
+
+/* 面包屑切换时轻微淡入 */
+@keyframes crumbEnter {
+    from { opacity: 0; transform: translateX(-4px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.vue-main .breadcrumb .crumb.current {
+    animation: crumbEnter var(--duration-fast) var(--ease-standard) both;
+}
+
+/* 列表行在视图切换后依次出现（ListView entrance，最多 8 行错峰） */
+@keyframes rowEnter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.vue-main .list-wrap > .file-item {
+    animation: rowEnter var(--duration-fast) var(--ease-standard) both;
+}
+
+.vue-main .list-wrap > .file-item:nth-child(2) { animation-delay: 12ms; }
+.vue-main .list-wrap > .file-item:nth-child(3) { animation-delay: 24ms; }
+.vue-main .list-wrap > .file-item:nth-child(4) { animation-delay: 36ms; }
+.vue-main .list-wrap > .file-item:nth-child(5) { animation-delay: 48ms; }
+.vue-main .list-wrap > .file-item:nth-child(6) { animation-delay: 60ms; }
+.vue-main .list-wrap > .file-item:nth-child(7) { animation-delay: 72ms; }
+.vue-main .list-wrap > .file-item:nth-child(8) { animation-delay: 84ms; }
+
+/* 视图模式切换（列表↔网格）同样走进入动画 */
+.vue-main .file-list-container.view-grid .grid-wrap > .file-item {
+    animation: rowEnter var(--duration-fast) var(--ease-standard) both;
+}
