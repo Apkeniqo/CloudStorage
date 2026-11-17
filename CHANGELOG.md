@@ -644,3 +644,14 @@
 - 角色下拉保留隐藏 input `#new-role`，`createUser()` 逻辑不用改
 
 实测：后台页 4 个开关（已启用 1 个）、`.win-switch` 轨道 40×20、下拉默认值 `user`、残留 `select` 数 0
+## beta 2026.1117.25 — 下拉浮层不再被遮挡 + 展开动画
+
+**被挡住的原因**：`.card` 上有 `backdrop-filter`，每个卡片都会自成层叠上下文；后面的「修改密码」卡片按文档顺序压在「用户」卡片之上，于是角色下拉展开时被盖住一半。
+
+修复两层：
+- 浮层 `z-index: 900`
+- 卡片展开时整体上浮：`.card:has(.win-combo.open) { position: relative; z-index: 30; }`（`:has()` 在 Edge 105+ 可用）
+
+实测：浮层 rect 254×103 完整可见，`document.elementFromPoint` 命中的是 `combo-item`（不再是下面的卡片）。
+
+**展开动画**：与 WinUI Flyout 一致——`opacity 0→1` + `translateY(-6px)→0` + `scale(0.98)→1`，167ms `cubic-bezier(0,0,0,1)`，`transform-origin: top center`；收起时同样 167ms 反向，`visibility` 延迟 167ms 切换（避免过渡被 display 打断）。
