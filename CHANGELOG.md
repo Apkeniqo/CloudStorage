@@ -591,3 +591,11 @@
 弹窗 Accent #4CC2FF -> #7AD4FF
 弹窗默认   透明 -> hover 后 .07
 ```
+## beta 2026.1117.21 — 后台分区层次修正
+
+- **右侧圆角被吃掉**：`body.embed` 之前 `padding: 0`，卡片直接顶到容器边缘，卡片自己的圆角被容器裁成直角。现在 embed 模式四周留 **12px**，卡片与边缘之间有间隙，卡片圆角与容器圆角都能看到
+- **块之间的间隙改成背景色**：`.admin-view` 外层背景从 `--card-bg`（半透明白，与卡片同色，层次糊在一起）改为 **`--bg-color`**（页面背景色），实测 `rgb(32,32,32)`
+- **每块卡片**保持 `--card-bg` + `--card-stroke` + `OverlayCornerRadius`，与文件列表页的卡片一致
+- 卡片之间补了 12px 间距（`body.embed .card + .card { margin-top: 12px }`）
+
+实测：`.admin-view` 1166×782、`background rgb(32,32,32)`、`border-radius 8px`、`overflow hidden`

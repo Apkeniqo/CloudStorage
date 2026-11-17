@@ -3353,8 +3353,8 @@ body.sidebar-collapsed .app-shell {
 .admin-view.show {
     display: flex;
     flex-direction: column;
-    /* 与 .file-list-container 一致的卡片外观，圆角在滚动时也保持 */
-    background: var(--card-bg);
+    /* 外层是页面背景色：卡片之间的间隙露出它，和各块卡片形成层次 */
+    background: var(--bg-color);
     border: 1px solid var(--card-stroke);
     border-radius: var(--OverlayCornerRadius);
     overflow: hidden;

@@ -17,7 +17,8 @@
         }
 
         body.embed {
-            padding: 0;
+            /* 与文件列表容器一致：四周留白，卡片圆角才不会被边缘裁掉 */
+            padding: 12px;
             background: transparent;
             display: block;
         }
@@ -25,6 +26,11 @@
         body.embed .admin-wrap {
             max-width: none;
             padding: 0;
+        }
+
+        /* 后台里每块卡片的间距，与文件列表页的层次保持一致 */
+        body.embed .card + .card {
+            margin-top: 12px;
         }
 
         .event-pager {
