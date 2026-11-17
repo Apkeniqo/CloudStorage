@@ -19,6 +19,7 @@
 import argparse
 import base64
 import configparser
+import hashlib
 import json
 import os
 import re
@@ -68,27 +69,68 @@ class Api:
         self.repo = repo
         self.token = token
 
-    def get(self, path, raw=False):
+    def get(self, path, raw=False, timeout=120, retries=3):
         url = 'https://api.github.com' + path
-        req = urllib.request.Request(url)
-        req.add_header('Accept', 'application/vnd.github+json')
-        req.add_header('User-Agent', 'cloudstorage-updater')
-        if self.token:
-            req.add_header('Authorization', 'token %s' % self.token)
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
-        except urllib.error.HTTPError as e:
+        last = None
+        for attempt in range(1, retries + 1):
+            req = urllib.request.Request(url)
+            req.add_header('Accept', 'application/vnd.github+json')
+            req.add_header('User-Agent', 'cloudstorage-updater')
+            if self.token:
+                req.add_header('Authorization', 'token %s' % self.token)
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    data = resp.read()
+                last = None
+                break
+            except urllib.error.HTTPError as e:
+                last = e
+                if e.code in (429, 500, 502, 503, 504) and attempt < retries:
+                    print('  请求异常（%d），%ds 后重试 %d/%d ...'
+                          % (e.code, attempt * 2, attempt, retries - 1))
+                    time.sleep(attempt * 2)
+                    continue
+                break
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                last = e
+                if attempt < retries:
+                    print('  网络错误（%s），%ds 后重试 %d/%d ...'
+                          % (e, attempt * 2, attempt, retries - 1))
+                    time.sleep(attempt * 2)
+                    continue
+                break
+
+        if last is None:
+            if raw:
+                return data
+            return json.loads(data.decode('utf-8'))
+
+        if isinstance(last, urllib.error.HTTPError):
+            e = last
             if e.code in (401, 403):
+                hint = ''
+                reset = e.headers.get('X-RateLimit-Reset') if e.headers else None
+                if reset:
+                    try:
+                        hint = '，额度重置于 %s' % time.strftime(
+                            '%H:%M:%S', time.localtime(int(reset)))
+                    except (ValueError, TypeError, OSError):
+                        hint = ''
                 raise SystemExit(
-                    'GitHub 拒绝访问（%d）。私有仓库需要在 config.ini 的 [UPDATE] token 填入访问令牌。'
-                    % e.code)
+                    'GitHub 拒绝访问（%d）%s。\n'
+                    '  · 未配置 token 时每小时只有 60 次 API 请求；'
+                    '在 config.ini 的 [UPDATE] token 填入访问令牌可提升到 5000 次。\n'
+                    '  · 私有仓库也必须填 token。' % (e.code, hint))
             if e.code == 404:
                 raise SystemExit(
                     '远端路径不存在（404）：%s\n'
                     '注意：私有仓库不带令牌时 GitHub 同样返回 404，'
                     '请检查 config.ini 的 [UPDATE] repo / branch / token。' % path)
             raise SystemExit('请求失败 %d：%s' % (e.code, path))
+
+        raise SystemExit(
+            '连接 api.github.com 失败：%s\n'
+            '请确认网络或代理能访问 api.github.com（github.com 被拦截不影响这里）。' % last)
         if raw:
             return data
         return json.loads(data.decode('utf-8'))
@@ -117,22 +159,57 @@ def should_skip(path):
     return path.lower().endswith(SKIP_SUFFIX)
 
 
+def git_blob_sha(data):
+    """计算 git 的 blob 对象 SHA1（git hash-object 的等价实现）"""
+    h = hashlib.sha1()
+    h.update(b'blob %d\0' % len(data))
+    h.update(data)
+    return h.hexdigest()
+
+
+def _local_blob_sha(full):
+    """本地文件按 LF 归一化后算 blob SHA；不存在返回 None"""
+    try:
+        with open(full, 'rb') as f:
+            data = f.read()
+    except OSError:
+        return None
+    return git_blob_sha(data.replace(b'\r\n', b'\n'))
+
+
 def download_tree(api, branch):
-    """返回 [(path, bytes)]，仅包含需要写入的文件"""
+    """返回 [(path, bytes)]：只下载与本地内容不同的文件"""
     tree = api.get('/repos/%s/git/trees/%s?recursive=1'
                    % (api.repo, urllib.parse.quote(branch, safe='')))
     if tree.get('truncated'):
         print('警告：仓库文件较多，GitHub 返回的树被截断，可能漏掉个别文件')
 
     files = []
+    same = 0
+    todo = []
     for item in tree.get('tree', []):
         if item.get('type') != 'blob':
             continue
         path = item['path']
         if should_skip(path):
             continue
-        blob = api.get('/repos/%s/git/blobs/%s' % (api.repo, item['sha']))
-        content = base64.b64decode(blob['content']) if blob.get('encoding') == 'base64' else blob['content'].encode()
+        full = os.path.join(BASE_DIR, path.replace('/', os.sep))
+        if os.path.isfile(full) and _local_blob_sha(full) == item['sha']:
+            same += 1
+            continue
+        todo.append(item)
+
+    print('远端文件 %d 个，%d 个未变化（跳过下载），%d 个需要下载'
+          % (len(todo) + same, same, len(todo)))
+
+    for i, item in enumerate(todo, 1):
+        path = item['path']
+        blob = api.get('/repos/%s/git/blobs/%s?ref=%s'
+                       % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
+        content = (base64.b64decode(blob['content'])
+                   if blob.get('encoding') == 'base64' else blob['content'].encode())
+        print('  下载 %d/%d  %s（%d KB）'
+              % (i, len(todo), path, max(1, len(content) // 1024)))
         files.append((path, content))
     return files
 
