@@ -837,3 +837,32 @@ iframe body class            "embed has-bg"
 ```
 
 **保留的功能改进**（不影响颜色）：静态资源 `no-cache`、iframe 自己跟随父窗口主题、进入后台时补一次外观同步。
+## beta 2026.1117.38 — 更新脚本支持 GitHub 加速代理
+
+`api.github.com` 能连、但 `raw.githubusercontent.com` / `codeload` 被拦，导致大文件下载容易断。现在文件内容改走加速代理。
+
+**配置**（config.ini）：
+
+```ini
+[UPDATE]
+repo   = Apkeniqo/CloudStorage
+branch = main
+token  = <可选>
+proxy  = https://gh.dpik.top      # 默认值，可留空表示不用代理
+```
+
+> `https://github.akams.cn/` 是节点选择页面，实际加速节点是 `https://gh.dpik.top/`。格式为 `<代理>/https://raw.githubusercontent.com/<repo>/<branch>/<path>`。
+
+**下载策略**：
+
+1. 文件清单 / 哈希仍走 `api.github.com` 的 git tree（1 次请求）
+2. 有变化的文件优先走**代理 raw**（带 3 次重试），失败自动回退 `git/blobs`
+3. 版本检测先走 api，api 不通时改用代理读 `version.py`
+
+**实测**：
+
+```
+代理直取 version.py            699 字节 ✓
+改动本地文件后 download_tree   37 个文件，35 个未变化（跳过），2 个需要下载（8.9s）
+                               update.py 15 KB / version.py 1 KB —— 都经代理下载成功
+```

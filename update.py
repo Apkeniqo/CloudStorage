@@ -30,6 +30,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+_PROXY = ''
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.ini')
 
@@ -46,7 +48,8 @@ def load_config():
     repo = cfg.get('UPDATE', 'repo', fallback='Apkeniqo/CloudStorage').strip()
     branch = cfg.get('UPDATE', 'branch', fallback='main').strip() or 'main'
     token = cfg.get('UPDATE', 'token', fallback='').strip()
-    return repo, branch, token
+    proxy = cfg.get('UPDATE', 'proxy', fallback='https://gh.dpik.top').strip()
+    return repo, branch, token, proxy
 
 
 def local_version():
@@ -139,10 +142,49 @@ class Api:
         return self.get(path, raw=True).decode('utf-8')
 
 
-def fetch_remote_version(api, branch):
-    data = api.get('/repos/%s/contents/version.py?ref=%s'
-                   % (api.repo, urllib.parse.quote(branch)))
-    source = base64.b64decode(data['content']).decode('utf-8')
+def proxy_raw_url(proxy, repo, branch, path):
+    """代理上的 raw 地址：<proxy>/https://raw.githubusercontent.com/<repo>/<branch>/<path>"""
+    return '%s/https://raw.githubusercontent.com/%s/%s/%s' % (
+        proxy.rstrip('/'), repo,
+        urllib.parse.quote(branch, safe=''),
+        urllib.parse.quote(path, safe='/'))
+
+
+def fetch_via_proxy(proxy, repo, branch, path, timeout=90, retries=3):
+    """通过代理取单个文件（失败抛异常）"""
+    url = proxy_raw_url(proxy, repo, branch, path)
+    last = None
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', 'cloudstorage-updater')
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read()
+            # 代理出错时可能回一张 HTML 页面，简单挡一下
+            if data[:15].lstrip().lower().startswith(b'<!doctype') or data[:6].lstrip().lower() == b'<html>':
+                raise ValueError('代理返回了 HTML（可能是不支持的地址或限流）')
+            return data
+        except Exception as e:
+            last = e
+            if attempt < retries:
+                print('    代理失败（%s），%ds 后重试 %d/%d ...'
+                      % (e, attempt * 2, attempt, retries - 1))
+                time.sleep(attempt * 2)
+    raise IOError('代理下载失败：%s（%s）' % (path, last))
+
+
+def fetch_remote_version(api, branch, proxy='', repo=''):
+    source = None
+    try:
+        data = api.get('/repos/%s/contents/version.py?ref=%s'
+                       % (api.repo, urllib.parse.quote(branch)))
+        source = base64.b64decode(data['content']).decode('utf-8')
+    except SystemExit:
+        if not (proxy and repo):
+            raise
+        print('  api.github.com 不可用，改用代理读取版本 ...')
+        raw = fetch_via_proxy(proxy, repo, branch, 'version.py')
+        source = raw.decode('utf-8', 'replace')
     for line in source.splitlines():
         line = line.strip()
         if line.startswith('VERSION'):
@@ -204,10 +246,18 @@ def download_tree(api, branch):
 
     for i, item in enumerate(todo, 1):
         path = item['path']
-        blob = api.get('/repos/%s/git/blobs/%s?ref=%s'
-                       % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
-        content = (base64.b64decode(blob['content'])
-                   if blob.get('encoding') == 'base64' else blob['content'].encode())
+        content = None
+        if _PROXY:
+            try:
+                content = fetch_via_proxy(_PROXY, api.repo, branch, path)
+            except Exception as e:
+                print('    改用 API 下载 %s' % path)
+                content = None
+        if content is None:
+            blob = api.get('/repos/%s/git/blobs/%s?ref=%s'
+                           % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
+            content = (base64.b64decode(blob['content'])
+                       if blob.get('encoding') == 'base64' else blob['content'].encode())
         print('  下载 %d/%d  %s（%d KB）'
               % (i, len(todo), path, max(1, len(content) // 1024)))
         files.append((path, content))
@@ -375,14 +425,18 @@ def main():
                         help='兼容旧用法：更新后重启服务（现在默认就会重启）')
     args = parser.parse_args()
 
-    repo, branch, token = load_config()
+    repo, branch, token, proxy = load_config()
     local = local_version()
     print('当前版本：%s' % local)
     print('远端仓库：%s @ %s' % (repo, branch))
+    if proxy:
+        print('加速代理：%s' % proxy)
 
     api = Api(repo, token)
+    global _PROXY
+    _PROXY = proxy
     try:
-        remote = fetch_remote_version(api, branch)
+        remote = fetch_remote_version(api, branch, proxy, repo)
     except SystemExit:
         raise
     except Exception as e:
