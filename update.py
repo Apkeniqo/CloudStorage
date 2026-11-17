@@ -30,8 +30,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-_PROXY = ''
-_PROXY_OK = True        # 代理一旦出错就熔断，本次全部改走 API
+# 默认加速节点（config.ini 的 [UPDATE] proxy 可覆盖，逗号分隔）
+DEFAULT_PROXIES = ('https://tvv.tw,'
+                   'https://gh.dpik.top,'
+                   'https://git.yylx.win,'
+                   'https://ghproxy.net')
+
+_PROXY_LIST = []
+_BAD_NODES = set()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.ini')
@@ -49,8 +55,9 @@ def load_config():
     repo = cfg.get('UPDATE', 'repo', fallback='Apkeniqo/CloudStorage').strip()
     branch = cfg.get('UPDATE', 'branch', fallback='main').strip() or 'main'
     token = cfg.get('UPDATE', 'token', fallback='').strip()
-    proxy = cfg.get('UPDATE', 'proxy', fallback='https://gh.dpik.top').strip()
-    return repo, branch, token, proxy
+    raw = cfg.get('UPDATE', 'proxy', fallback=DEFAULT_PROXIES) or ''
+    proxies = [p.strip().rstrip('/') for p in raw.replace('\n', ',').split(',') if p.strip()]
+    return repo, branch, token, proxies
 
 
 def local_version():
@@ -151,40 +158,45 @@ def proxy_raw_url(proxy, repo, branch, path):
         urllib.parse.quote(path, safe='/'))
 
 
-def fetch_via_proxy(proxy, repo, branch, path, timeout=60, retries=1):
-    """通过代理取单个文件（失败抛异常）"""
+def fetch_one_node(proxy, repo, branch, path, timeout=20):
+    """用指定节点取单个文件（失败抛异常）"""
     url = proxy_raw_url(proxy, repo, branch, path)
+    req = urllib.request.Request(url)
+    req.add_header('User-Agent', 'cloudstorage-updater')
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = resp.read()
+    head = data[:32].lstrip().lower()
+    if head.startswith(b'<!doctype') or head.startswith(b'<html'):
+        raise ValueError('节点返回 HTML（限流或不支持该地址）')
+    return data
+
+
+def fetch_via_proxy(proxies, repo, branch, path, timeout=20):
+    """按顺序尝试各节点；失败的节点本次运行内不再使用"""
     last = None
-    for attempt in range(1, retries + 1):
+    for node in proxies:
+        if node in _BAD_NODES:
+            continue
         try:
-            req = urllib.request.Request(url)
-            req.add_header('User-Agent', 'cloudstorage-updater')
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                data = resp.read()
-            # 代理出错时可能回一张 HTML 页面，简单挡一下
-            if data[:15].lstrip().lower().startswith(b'<!doctype') or data[:6].lstrip().lower() == b'<html>':
-                raise ValueError('代理返回了 HTML（可能是不支持的地址或限流）')
-            return data
+            return fetch_one_node(node, repo, branch, path, timeout)
         except Exception as e:
+            _BAD_NODES.add(node)
             last = e
-            if attempt < retries:
-                print('    代理失败（%s），%ds 后重试 %d/%d ...'
-                      % (e, attempt * 2, attempt, retries - 1))
-                time.sleep(attempt * 2)
-    raise IOError('代理下载失败：%s（%s）' % (path, last))
+            print('    节点 %s 不可用：%s' % (node, e))
+    raise IOError('所有加速节点都失败：%s（%s）' % (path, last))
 
 
-def fetch_remote_version(api, branch, proxy='', repo=''):
+def fetch_remote_version(api, branch, proxies=None, repo=''):
     source = None
     try:
         data = api.get('/repos/%s/contents/version.py?ref=%s'
                        % (api.repo, urllib.parse.quote(branch)))
         source = base64.b64decode(data['content']).decode('utf-8')
     except SystemExit:
-        if not (proxy and repo):
+        if not (proxies and repo):
             raise
-        print('  api.github.com 不可用，改用代理读取版本 ...')
-        raw = fetch_via_proxy(proxy, repo, branch, 'version.py')
+        print('  api.github.com 不可用，改用加速节点读取版本 ...')
+        raw = fetch_via_proxy(proxies, repo, branch, 'version.py')
         source = raw.decode('utf-8', 'replace')
     for line in source.splitlines():
         line = line.strip()
@@ -222,7 +234,7 @@ def _local_blob_sha(full):
 
 def download_tree(api, branch, write=False):
     """下载需要更新的文件；write=True 时边下边写（中断后可续）"""
-    global _PROXY_OK
+    global _BAD_NODES
     tree = api.get('/repos/%s/git/trees/%s?recursive=1'
                    % (api.repo, urllib.parse.quote(branch, safe='')))
     if tree.get('truncated'):
@@ -251,12 +263,11 @@ def download_tree(api, branch, write=False):
         path = item['path']
         content = None
 
-        if _PROXY and _PROXY_OK:
+        if _PROXY_LIST and len(_BAD_NODES) < len(_PROXY_LIST):
             try:
-                content = fetch_via_proxy(_PROXY, api.repo, branch, path)
+                content = fetch_via_proxy(_PROXY_LIST, api.repo, branch, path)
             except Exception as e:
-                _PROXY_OK = False
-                print('  代理不可用（%s），本次剩余文件改走 API' % e)
+                print('  所有加速节点都不可用，本次剩余文件改走 API')
                 content = None
 
         if content is None:
@@ -447,19 +458,19 @@ def main():
                         help='兼容旧用法：更新后重启服务（现在默认就会重启）')
     args = parser.parse_args()
 
-    repo, branch, token, proxy = load_config()
+    repo, branch, token, proxies = load_config()
     local = local_version()
     print('当前版本：%s' % local)
     print('远端仓库：%s @ %s' % (repo, branch))
-    if proxy:
-        print('加速代理：%s' % proxy)
+    if proxies:
+        print('加速节点：%s' % ' , '.join(proxies))
 
     api = Api(repo, token)
-    global _PROXY, _PROXY_OK
-    _PROXY = proxy
-    _PROXY_OK = True
+    global _PROXY_LIST, _BAD_NODES
+    _PROXY_LIST = proxies
+    _BAD_NODES = set()
     try:
-        remote = fetch_remote_version(api, branch, proxy, repo)
+        remote = fetch_remote_version(api, branch, proxies, repo)
     except SystemExit:
         raise
     except Exception as e:
