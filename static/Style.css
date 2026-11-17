@@ -3343,7 +3343,8 @@ body.sidebar-collapsed .app-shell {
     display: none;
     flex: 1 1 auto;
     min-height: 0;
-    width: 100%;
+    /* 不要写 width: 100%：配合 margin 会溢出右侧，圆角被裁成直角 */
+    align-self: stretch;
     box-sizing: border-box;
     /* 与 .file-list-container 一致的外边距，后台宽度与文件列表对齐 */
     padding: 0;
@@ -3481,11 +3482,15 @@ body.has-bg::before {
 .vue-main .file-list-container,
 .modal-mask .modal-card,
 .upload-toast,
-.side-storage,
 .vue-main .file-header {
     background: color-mix(in srgb,
         var(--card-bg) calc(var(--panel-alpha, 1) * 100%),
         transparent);
+}
+
+/* 侧栏存储块保持原样，不参与容器不透明度 */
+#winui-sidebar .side-storage {
+    background: transparent;
 }
 
 body.has-bg .file-list-container,

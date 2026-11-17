@@ -623,3 +623,16 @@
 保存后 /auth/me 返回 bg_opacity=60, panel_opacity=50, blur_bg=6
 --panel-alpha=0.5 时卡片背景 alpha 从 0.0512 降到 0.0256（oklab 计算值）
 ```
+## beta 2026.1117.23 — 后台右圆角修复 + 存储块背景还原
+
+**右圆角还是直角的原因**：`.admin-view` 同时写了 `width: 100%` 和 `margin: 0 16px`，实际宽度变成「容器宽 + 32px」，右侧溢出 16px 被容器 `overflow: hidden` 裁掉——圆角正好在被裁的那一侧。
+
+改成 `align-self: stretch` + 去掉 `width: 100%`，实测：
+
+```
+.admin-view  left=346  right=1480  width=1134
+.vue-main    left=330  right=1496  width=1166
+右侧间隙 -16px（即留出 16px 边距，不再溢出）
+```
+
+**存储容量块背景不一样**：上一版给「容器不透明度」加 `color-mix` 规则时，选择器里误包含了 `.side-storage`，导致侧栏的存储区块多出一层卡片底色。已从该规则移除，并显式设为 `transparent`，实测背景回到 `rgba(0, 0, 0, 0)`。
