@@ -1086,6 +1086,28 @@
     loadUsers();
     loadEvents();
     (function () {
+        // 嵌在主界面里时，主动跟随父窗口的主题与外观变量（不依赖父页面是否同步过来）
+        (function () {
+            if (location.search.indexOf('embed=1') < 0) return;
+            function follow() {
+                try {
+                    var topDoc = window.top.document;
+                    var t = topDoc.documentElement.getAttribute('data-theme');
+                    if (t && t !== document.documentElement.getAttribute('data-theme')) {
+                        document.documentElement.setAttribute('data-theme', t);
+                    }
+                    if (topDoc.body && document.body) {
+                        var hasBg = topDoc.body.classList.contains('has-bg');
+                        if (hasBg !== document.body.classList.contains('has-bg')) {
+                            document.body.classList.toggle('has-bg', hasBg);
+                        }
+                    }
+                } catch (e) { /* 跨域或父窗口未就绪时忽略 */ }
+            }
+            follow();
+            setInterval(follow, 600);
+        })();
+
         var saved = localStorage.getItem('fluent_theme') || 'system';
         var dark = saved === 'dark' ||
             (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);

@@ -987,6 +987,17 @@ def current_user():
         return None
     return user
 
+@app.after_request
+def no_cache_static(resp):
+    """静态资源一律走协商缓存（304），避免升级后浏览器继续用旧 JS/CSS"""
+    try:
+        if request.path.startswith('/static/') or request.path.startswith('/vendor/'):
+            resp.headers['Cache-Control'] = 'no-cache, must-revalidate'
+    except Exception:
+        pass
+    return resp
+
+
 @app.before_request
 def require_login():
     # 还没完成初始化：只放行向导、静态资源和健康检查

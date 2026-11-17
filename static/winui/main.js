@@ -26,6 +26,9 @@ const App = {
                     if (fr && fr.getAttribute('src') !== '/admin?embed=1') {
                         fr.setAttribute('src', '/admin?embed=1');
                     }
+                    // 进入后台时再同步一次外观变量，避免 iframe 里的状态滞后
+                    syncFrameVars();
+                    setTimeout(syncFrameVars, 300);
                 });
             }
         }, { immediate: true });

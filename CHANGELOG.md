@@ -804,3 +804,19 @@ html:not([data-theme="dark"]) body.has-bg .card {
 后台   iframe .card          color(srgb 0.0706 0.0784 0.102 / 0.780)   ← 完全一致
 iframe body class            "embed has-bg"
 ```
+## beta 2026.1117.36 — 后台主题改为「自己跟随」，不再依赖父页面推送
+
+之前后台主题靠父页面的 `syncFrameVars()` 推送，一旦父页面是旧缓存（模块没有版本号），iframe 就停在打开时的主题——表现就是「主界面深色、后台浅色、文字发暗」。
+
+三层修复：
+
+1. **iframe 自己跟随**：`admin.html` 在 `embed=1` 模式下每 600ms 读一次父窗口的 `data-theme` 和 `has-bg` 并同步（同源可直接访问）。即使父页面完全不推送，后台也会自己变
+2. **静态资源不缓存**：`server.py` 给 `/static/*` 加 `Cache-Control: no-cache, must-revalidate`，升级后浏览器不会继续用旧 JS/CSS（这也解释了好几次「改了没效果」）
+3. **进入后台时补一次同步**：`watch(state.view)` 里 `syncFrameVars()` + 300ms 后再补一次
+
+实测（直接改父窗口主题，不走 store）：
+
+```
+浅色 + 背景图   frame=light  card=color(srgb 1 1 1 / 0.839)   文字 rgba(0,0,0,.89)
+深色 + 背景图   frame=dark   card=color(srgb .0706 .0784 .102 / .780)  文字 rgb(255,255,255)
+```
