@@ -3,7 +3,7 @@
 import { createApp, h, watch, onMounted, nextTick, Teleport } from 'vue';
 import WinUIOnWeb from 'winuionweb';
 import {
-    state, init, reload, visibleFiles, formatTime,
+    state, init, reload, visibleFiles, formatTime, syncFrameVars,
     uploadBackgroundFile, toast
 } from './store.js';
 import { addFiles } from './upload.js';
@@ -203,6 +203,15 @@ function mount() {
     bindFileInputs();
     bindDragDrop();
     bindSocket();
+
+    // 后台 iframe 每次加载完成后，把当前外观变量灌进去
+    const adminFrame = document.getElementById('admin-frame');
+    if (adminFrame) {
+        adminFrame.addEventListener('load', () => {
+            if (adminFrame.getAttribute('src') === '/admin?embed=1') syncFrameVars();
+        });
+    }
+
     init();
 }
 

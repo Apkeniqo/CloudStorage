@@ -679,3 +679,18 @@
 
 - **控件居右**：`.field > div:last-child` 改为 `flex` + `align-items: flex-end` + `justify-self: end`，输入框 / 开关 / 下拉都贴右侧。实测输入框右缘 1227 与字段右缘 1227 完全对齐，宽度 380px
 - **下拉遮挡**：上一版为了露出模糊把底色稀释到 47%，结果不支持 `backdrop-filter` 的环境（如禁用 GPU）下面板近乎透明，和下面的文字叠在一起。现在底色固定 `rgba(38,38,38,.90)` + `blur(24px) saturate(1.4)` + 阴影：支持模糊时是亚克力，不支持时也有 90% 遮挡
+## beta 2026.1117.29 — 后台容器跟随「不透明度 / 模糊度」
+
+之前只有主界面的文件容器吃 `--panel-alpha` / `--panel-blur`，后台 `.admin-view` 写死了底色和 `blur(24px)`，所以调滑块对后台没反应。
+
+- `.admin-view.show` 改用 `color-mix(in srgb, var(--card-bg) var(--panel-alpha), transparent)` + `backdrop-filter: blur(var(--panel-blur))`，与文件容器同一套变量
+- **iframe 内部**是独立文档，继承不到父页面变量：新增 `syncFrameVars()`，用 `iframe.contentDocument.documentElement.style` 把 `--panel-alpha / --panel-blur / --bg-opacity / --bg-blur` 写进去；`applyOpacity` / `applyBlur` 每次变更都会调用，iframe 加载完成时也同步一次
+- `admin.html` 的 `.card` 背景改成 `color-mix(... var(--panel-alpha) ...)`、模糊改成 `var(--panel-blur)`
+
+实测（把 `--panel-alpha` 设为 0.45、`--panel-blur` 设为 8px）：
+
+```
+.admin-view 背景  color(srgb 1 1 1 / 0.0510)
+iframe .card 背景 color(srgb 1 1 1 / 0.0229)   ← 0.0512 × 0.45
+iframe .card 模糊 blur(8px) saturate(1.25)
+```

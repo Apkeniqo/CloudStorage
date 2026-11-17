@@ -392,6 +392,21 @@ export function applyBlur(panel, bg) {
     state.blurBg = bg;
     document.documentElement.style.setProperty('--panel-blur', panel + 'px');
     document.documentElement.style.setProperty('--bg-blur', bg + 'px');
+    syncFrameVars();
+}
+
+// 把外观变量同步进后台 iframe（同源，可直接写它的 :root）
+export function syncFrameVars() {
+    const fr = document.getElementById('admin-frame');
+    if (!fr) return;
+    let doc = null;
+    try { doc = fr.contentDocument; } catch (e) { return; }
+    if (!doc || !doc.documentElement) return;
+    const root = doc.documentElement;
+    root.style.setProperty('--bg-opacity', String(state.bgOpacity / 100));
+    root.style.setProperty('--panel-alpha', String(state.panelOpacity / 100));
+    root.style.setProperty('--panel-blur', state.blurPanel + 'px');
+    root.style.setProperty('--bg-blur', state.blurBg + 'px');
 }
 
 export function applyOpacity(bgOpacity, panelOpacity) {
@@ -399,6 +414,7 @@ export function applyOpacity(bgOpacity, panelOpacity) {
     state.panelOpacity = panelOpacity;
     document.documentElement.style.setProperty('--bg-opacity', String(bgOpacity / 100));
     document.documentElement.style.setProperty('--panel-alpha', String(panelOpacity / 100));
+    syncFrameVars();
 }
 
 let visualTimer = null;
