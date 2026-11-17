@@ -31,6 +31,7 @@ import urllib.parse
 import urllib.request
 
 _PROXY = ''
+_PROXY_OK = True        # 代理一旦出错就熔断，本次全部改走 API
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, 'config.ini')
@@ -150,7 +151,7 @@ def proxy_raw_url(proxy, repo, branch, path):
         urllib.parse.quote(path, safe='/'))
 
 
-def fetch_via_proxy(proxy, repo, branch, path, timeout=90, retries=3):
+def fetch_via_proxy(proxy, repo, branch, path, timeout=60, retries=1):
     """通过代理取单个文件（失败抛异常）"""
     url = proxy_raw_url(proxy, repo, branch, path)
     last = None
@@ -219,8 +220,9 @@ def _local_blob_sha(full):
     return git_blob_sha(data.replace(b'\r\n', b'\n'))
 
 
-def download_tree(api, branch):
-    """返回 [(path, bytes)]：只下载与本地内容不同的文件"""
+def download_tree(api, branch, write=False):
+    """下载需要更新的文件；write=True 时边下边写（中断后可续）"""
+    global _PROXY_OK
     tree = api.get('/repos/%s/git/trees/%s?recursive=1'
                    % (api.repo, urllib.parse.quote(branch, safe='')))
     if tree.get('truncated'):
@@ -244,23 +246,43 @@ def download_tree(api, branch):
     print('远端文件 %d 个，%d 个未变化（跳过下载），%d 个需要下载'
           % (len(todo) + same, same, len(todo)))
 
+    failed = []
     for i, item in enumerate(todo, 1):
         path = item['path']
         content = None
-        if _PROXY:
+
+        if _PROXY and _PROXY_OK:
             try:
                 content = fetch_via_proxy(_PROXY, api.repo, branch, path)
             except Exception as e:
-                print('    改用 API 下载 %s' % path)
+                _PROXY_OK = False
+                print('  代理不可用（%s），本次剩余文件改走 API' % e)
                 content = None
+
         if content is None:
-            blob = api.get('/repos/%s/git/blobs/%s?ref=%s'
-                           % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
-            content = (base64.b64decode(blob['content'])
-                       if blob.get('encoding') == 'base64' else blob['content'].encode())
+            try:
+                blob = api.get('/repos/%s/git/blobs/%s?ref=%s'
+                               % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
+                content = (base64.b64decode(blob['content'])
+                           if blob.get('encoding') == 'base64' else blob['content'].encode())
+            except SystemExit as e:
+                failed.append((path, str(e)))
+                print('  ✗ %s 下载失败：%s' % (path, e))
+                continue
+
         print('  下载 %d/%d  %s（%d KB）'
               % (i, len(todo), path, max(1, len(content) // 1024)))
         files.append((path, content))
+        if write:
+            write_file(path, content)
+
+    if failed:
+        print()
+        print('有 %d 个文件没下载成功：' % len(failed))
+        for path, why in failed:
+            print('  ✗ %s' % path)
+        print('已成功写入的文件保留；重新执行 update 会从断点继续。')
+
     return files
 
 
@@ -433,8 +455,9 @@ def main():
         print('加速代理：%s' % proxy)
 
     api = Api(repo, token)
-    global _PROXY
+    global _PROXY, _PROXY_OK
     _PROXY = proxy
+    _PROXY_OK = True
     try:
         remote = fetch_remote_version(api, branch, proxy, repo)
     except SystemExit:
@@ -453,19 +476,17 @@ def main():
 
     print('发现新版本：%s -> %s' % (local, remote))
 
-    files = download_tree(api, branch)
-    diff = changed_files(files)
-    print('远端文件 %d 个，需要更新 %d 个' % (len(files), len(diff)))
-    for path, _ in diff:
+    files = download_tree(api, branch, write=not args.check)
+    print('远端文件 %d 个，需要更新 %d 个' % (len(files), len(files)))
+    for path, _ in files:
         print('  ~ %s' % path)
 
     if args.check:
         print('（--check 模式，未写入任何文件）')
         return 0
 
-    for path, content in diff:
-        write_file(path, content)
-    print('更新完成：%d 个文件已写入' % len(diff))
+    print('更新完成：%d 个文件已写入' % len(files))
+    diff = files
 
     if not diff:
         print('远端内容与本地一致，无需重启。')
