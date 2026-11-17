@@ -2590,17 +2590,21 @@ html.theme-switching *::after {
 
 /* 图标按钮：沿用组件库的 WinUI 默认按钮外观，仅统一尺寸 */
 #winui-toolbar .winui-icon-btn {
+    width: 40px !important;
+    height: 32px !important;
     min-width: 36px !important;
     min-height: 32px !important;
-    padding: 6px !important;
+    padding: 0 !important;
     border-radius: var(--ControlCornerRadius) !important;
 }
 
-/* 上传按钮：AccentButton 外观 + 图标文字同一行 */
+/* 上传按钮：只锁高度，内边距/字号/配色完全交给组件，
+   避免外层 button 比内部承载层大导致「点击范围≠视觉范围」 */
 #winui-toolbar .winui-upload-btn {
-    min-height: 32px;
-    padding: 0 12px;
-    font-weight: 600;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
+    border-radius: var(--ControlCornerRadius);
 }
 /* 组件化工具栏的自定义禁用态（避免组件 disabled 样式带出的填充） */
 #winui-toolbar .winui-disabled {
