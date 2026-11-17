@@ -655,3 +655,9 @@
 实测：浮层 rect 254×103 完整可见，`document.elementFromPoint` 命中的是 `combo-item`（不再是下面的卡片）。
 
 **展开动画**：与 WinUI Flyout 一致——`opacity 0→1` + `translateY(-6px)→0` + `scale(0.98)→1`，167ms `cubic-bezier(0,0,0,1)`，`transform-origin: top center`；收起时同样 167ms 反向，`visibility` 延迟 167ms 切换（避免过渡被 display 打断）。
+## beta 2026.1117.26 — 下拉浮层加亚克力模糊、菜单项拉开间距
+
+- **模糊**：`.combo-list` 底色改成半透明 `rgba(44,44,44,.82)` 并加 `backdrop-filter: blur(30px) saturate(1.25)`，与主界面弹窗的亚克力质感一致
+- **菜单项重叠**：原来 `.combo-item` 只有 `padding: 7px 10px`、相邻项背景直接贴合。现在浮层改用 `flex-direction: column` + `gap: 2px`、内边距 6px，单项 padding 提到 `8px 10px` 并加 `line-height: 1.35`，实测三项高度均 34px、间隔 2px，不再相互压边
+
+实测：`backdrop-filter: blur(30px) saturate(1.25)`；底色 `rgba(44, 44, 44, 0.86)`；item rect 分别为 [596,34] [631,34] [667,34]
