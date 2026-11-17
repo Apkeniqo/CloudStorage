@@ -568,3 +568,26 @@
 **去掉按钮底部边框**：组件默认有一条更深的 `border-bottom`（`--ButtonBorderBrushBottomCurrent`）。今天统一把工具按钮、行内操作、弹窗按钮、选择条按钮的边框厚度与各方向画笔都设成透明，实测 `border-bottom-width = 0px`。
 
 **后台卡片圆角**：`.admin-view` 之前是裸 iframe，没有卡片底色和圆角，滚动到中间时与文件列表的视觉不统一。现在补上与 `.file-list-container` 一致的 `background / border / border-radius / overflow: hidden`，iframe 整体是一张圆角卡片，滚动时边缘也不会破。
+## beta 2026.1117.20 — 修正悬浮态：不再染灰 Accent、对比度回落、弹窗恢复主题
+
+**「选择图片」悬浮变灰的原因**：上一版给普通按钮加 hover 规则时没有排除 Accent 按钮，而组件里 `--ButtonBackgroundPointerOver` 在 Accent 样式下本应映射到 `--AccentButtonBackgroundPointerOver`——被直接覆盖成白色半透明，于是蓝按钮一 hover 就变灰。现在普通按钮的规则全部加上 `:not(.AccentButtonStyle)`。
+
+**Accent 悬停改成变亮**（而不是 WinUI 默认的略微变暗）：
+
+| 主题 | 常态 | 悬停 | 按下 |
+|---|---|---|---|
+| 深色 | #4CC2FF | #7AD4FF | #38B4F0 |
+| 浅色 | #0067C0 | #1A7FD0 | #005A9E |
+
+**对比度回落**：普通按钮 hover 从 10% 降到 7%（浅色 5%），按下 12%（浅色 9%）。
+
+**弹窗颜色错乱的根因**：分享/背景弹窗、上传面板被 Teleport 到 body 后脱离了 `win-theme-scope` 容器，组件读到的是浅色主题的默认变量（实测「恢复默认」按钮常态背景为 rgba(255,255,255,.7)）。现在这些浮层的根元素自带 `win-theme-scope theme-dark/theme-light`，实测恢复为 rgba(255,255,255,.06)。
+
+实测（CDP 鼠标悬停）：
+
+```
+上传按钮   #4CC2FF -> #7AD4FF
+图标按钮   透明 -> rgba(255,255,255,.07)
+弹窗 Accent #4CC2FF -> #7AD4FF
+弹窗默认   透明 -> hover 后 .07
+```

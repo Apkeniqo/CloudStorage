@@ -394,7 +394,9 @@ export const FileList = {
 export const SelectionBar = {
     setup() {
         return () => selectedCount.value > 0
-            ? h('div', { class: 'selection-bar show' }, [
+            ? h('div', {
+                class: 'selection-bar show win-theme-scope ' + (state.dark ? 'theme-dark' : 'theme-light')
+            }, [
                 h('span', { class: 'selection-count' }, ['已选 ', h('b', {}, String(selectedCount.value)), ' 项']),
                 h('div', { class: 'selection-actions' }, [
                     h(Button, {
@@ -418,7 +420,7 @@ export const SelectionBar = {
 export const UploadPanel = {
     setup() {
         return () => uploads.tasks.length
-            ? h('div', { class: 'upload-toast' }, [
+            ? h('div', { class: 'upload-toast win-theme-scope ' + (state.dark ? 'theme-dark' : 'theme-light') }, [
                 h('div', { class: 'upload-head' }, [
                     h('span', {}, '上传 ' + uploads.tasks.filter(t => t.status === 'done').length
                         + '/' + uploads.tasks.length),
@@ -446,7 +448,10 @@ export const UploadPanel = {
 export const ShareModal = {
     setup() {
         return () => state.showShares
-            ? h('div', { class: 'modal-mask show', onClick: (e) => { if (e.target === e.currentTarget) state.showShares = false; } }, [
+            ? h('div', {
+                class: 'modal-mask show win-theme-scope ' + (state.dark ? 'theme-dark' : 'theme-light'),
+                onClick: (e) => { if (e.target === e.currentTarget) state.showShares = false; }
+            }, [
                 h('div', { class: 'modal-card' }, [
                     h('div', { class: 'modal-head' }, [
                         h('span', {}, '分享链接'),
@@ -478,7 +483,10 @@ export const ShareModal = {
 export const BackgroundModal = {
     setup() {
         return () => state.showBackground
-            ? h('div', { class: 'modal-mask show', onClick: (e) => { if (e.target === e.currentTarget) state.showBackground = false; } }, [
+            ? h('div', {
+                class: 'modal-mask show win-theme-scope ' + (state.dark ? 'theme-dark' : 'theme-light'),
+                onClick: (e) => { if (e.target === e.currentTarget) state.showBackground = false; }
+            }, [
                 h('div', { class: 'modal-card bg-card' }, [
                     h('div', { class: 'modal-head' }, [
                         h('span', {}, '个人背景'),

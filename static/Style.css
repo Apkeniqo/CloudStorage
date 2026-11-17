@@ -3431,44 +3431,40 @@ body.admin-mode .app-shell {
     --AccentButtonBorderBrushPressed: transparent;
 }
 
-/* 深色主题：普通按钮 hover 提亮到 10%，按下 16% */
-html[data-theme="dark"] #winui-toolbar .winui-icon-btn,
-html[data-theme="dark"] #winui-app .action-btn,
-html[data-theme="dark"] .modal-mask .win-btn,
-html[data-theme="dark"] .vue-main .selection-actions .win-btn {
-    --ButtonBackgroundPointerOver: rgba(255, 255, 255, 0.10);
-    --ButtonBackgroundPressed: rgba(255, 255, 255, 0.16);
+/* 深色主题：普通按钮 hover 7%，按下 12%（比组件默认略强，但不刺眼） */
+html[data-theme="dark"] #winui-toolbar .winui-icon-btn:not(.AccentButtonStyle),
+html[data-theme="dark"] #winui-app .action-btn:not(.AccentButtonStyle),
+html[data-theme="dark"] .modal-mask .win-btn:not(.AccentButtonStyle),
+html[data-theme="dark"] .vue-main .selection-actions .win-btn:not(.AccentButtonStyle) {
+    --ButtonBackgroundPointerOver: rgba(255, 255, 255, 0.07);
+    --ButtonBackgroundPressed: rgba(255, 255, 255, 0.12);
 }
 
-/* 浅色主题：hover 加深到 8%，按下 12% */
-html:not([data-theme="dark"]) #winui-toolbar .winui-icon-btn,
-html:not([data-theme="dark"]) #winui-app .action-btn,
-html:not([data-theme="dark"]) .modal-mask .win-btn,
-html:not([data-theme="dark"]) .vue-main .selection-actions .win-btn {
-    --ButtonBackgroundPointerOver: rgba(0, 0, 0, 0.075);
-    --ButtonBackgroundPressed: rgba(0, 0, 0, 0.12);
+/* 浅色主题：hover 5%，按下 9% */
+html:not([data-theme="dark"]) #winui-toolbar .winui-icon-btn:not(.AccentButtonStyle),
+html:not([data-theme="dark"]) #winui-app .action-btn:not(.AccentButtonStyle),
+html:not([data-theme="dark"]) .modal-mask .win-btn:not(.AccentButtonStyle),
+html:not([data-theme="dark"]) .vue-main .selection-actions .win-btn:not(.AccentButtonStyle) {
+    --ButtonBackgroundPointerOver: rgba(0, 0, 0, 0.05);
+    --ButtonBackgroundPressed: rgba(0, 0, 0, 0.09);
 }
 
-/* Accent 按钮（上传、选择图片、删除）hover 明显变亮 */
-html[data-theme="dark"] #winui-toolbar .winui-upload-btn,
-html[data-theme="dark"] .modal-mask .win-btn.AccentButtonStyle,
-html[data-theme="dark"] .vue-main .selection-actions .win-btn {
-    --AccentButtonBackgroundPointerOver: rgba(76, 194, 255, 0.92);
-    --AccentButtonBackgroundPressed: rgba(76, 194, 255, 0.80);
+/* Accent 按钮（上传 / 选择图片 / 删除）：悬停变亮，而不是被通用规则染灰 */
+html[data-theme="dark"] .win-btn.AccentButtonStyle {
+    --ButtonBackgroundPointerOver: #7ad4ff;
+    --ButtonBackgroundPressed: #38b4f0;
 }
 
-html:not([data-theme="dark"]) #winui-toolbar .winui-upload-btn,
-html:not([data-theme="dark"]) .modal-mask .win-btn.AccentButtonStyle,
-html:not([data-theme="dark"]) .vue-main .selection-actions .win-btn {
-    --AccentButtonBackgroundPointerOver: var(--accent-hover);
-    --AccentButtonBackgroundPressed: var(--accent-pressed);
+html:not([data-theme="dark"]) .win-btn.AccentButtonStyle {
+    --ButtonBackgroundPointerOver: #1a7fd0;
+    --ButtonBackgroundPressed: #005a9e;
 }
 
-/* 侧栏导航项 hover 也加强一点 */
+/* 侧栏导航项 hover 保持克制 */
 html[data-theme="dark"] #winui-sidebar .side-item {
-    --ButtonBackgroundPointerOver: rgba(255, 255, 255, 0.08);
+    --ButtonBackgroundPointerOver: rgba(255, 255, 255, 0.06);
 }
 
 html:not([data-theme="dark"]) #winui-sidebar .side-item {
-    --ButtonBackgroundPointerOver: rgba(0, 0, 0, 0.05);
+    --ButtonBackgroundPointerOver: rgba(0, 0, 0, 0.04);
 }
