@@ -37,27 +37,30 @@ const App = {
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),
 
-            h('div', {
-                class: 'file-list-container ' + (state.viewMode === 'grid' ? 'view-grid' : 'view-list'),
-                id: 'file-container'
-            }, [
-                state.view === 'admin'
-                    ? h('iframe', {
+            // 管理后台：独立全高 iframe，避免被列表容器的布局影响
+            state.view === 'admin'
+                ? h('div', { class: 'admin-view' }, [
+                    h('iframe', {
                         id: 'admin-frame',
+                        class: 'admin-frame',
                         src: '/admin?embed=1',
-                        title: '管理后台',
-                        style: 'width:100%;height:100%;border:0;min-height:70vh'
+                        title: '管理后台'
                     })
-                    : [
-                        h(FileList),
-                        h(SelectionBar)
-                    ]
-            ]),
+                ])
+                : h('div', {
+                    class: 'file-list-container ' + (state.viewMode === 'grid' ? 'view-grid' : 'view-list'),
+                    id: 'file-container'
+                }, [
+                    h(FileList),
+                    h(SelectionBar)
+                ]),
 
-            h('div', { class: 'status-bar' }, [
-                h('span', {}, state.loading ? '正在同步…' : '已同步'),
-                h('span', {}, visibleFiles.value.length + ' 项')
-            ]),
+            state.view === 'admin'
+                ? null
+                : h('div', { class: 'status-bar' }, [
+                    h('span', {}, state.loading ? '正在同步…' : '已同步'),
+                    h('span', {}, visibleFiles.value.length + ' 项')
+                ]),
 
             h(UploadPanel),
             h(ShareModal),

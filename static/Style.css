@@ -3258,3 +3258,94 @@ body.sidebar-collapsed .app-shell {
     display: none !important;
     animation: none !important;
 }
+/* ==================================================================
+   修正：组件内部输入框不套用全局 input:focus 下划线
+   （否则会和组件自带的聚焦边框叠成一条溢出的蓝线）
+   ================================================================== */
+#winui-sidebar input:focus,
+#winui-toolbar input:focus,
+#winui-app input:focus,
+#winui-sidebar input:hover,
+#winui-toolbar input:hover,
+#winui-app input:hover {
+    box-shadow: none !important;
+    border-bottom-color: transparent !important;
+    outline: none !important;
+}
+
+/* 组件库搜索框：聚焦时只保留组件自己的强调线，不外扩 */
+#winui-sidebar .win-text-box,
+#winui-sidebar .win-text-box * {
+    overflow: visible;
+}
+
+#winui-sidebar .win-text-box input {
+    width: 100%;
+}
+
+/* ==================================================================
+   侧边栏折叠/展开动画（桌面）
+   ================================================================== */
+@media (min-width: 901px) {
+    .sidebar {
+        transition: width var(--duration-normal) var(--ease-standard),
+                    flex-basis var(--duration-normal) var(--ease-standard),
+                    opacity var(--duration-fast) var(--ease-standard),
+                    padding var(--duration-normal) var(--ease-standard);
+    }
+
+    body.sidebar-collapsed .sidebar {
+        display: flex;
+        width: 0;
+        flex-basis: 0;
+        padding-left: 0;
+        padding-right: 0;
+        opacity: 0;
+        overflow: hidden;
+        visibility: hidden;
+    }
+}
+
+/* 折叠后主内容平滑变宽 */
+.main-pane {
+    transition: flex-basis var(--duration-normal) var(--ease-standard);
+}
+
+@media (max-width: 900px) {
+    /* 窄屏用抽屉，不做宽度动画 */
+    .sidebar {
+        transition: transform var(--duration-normal) var(--ease-standard);
+        width: 232px;
+        flex-basis: 232px;
+        opacity: 1;
+    }
+
+    body.sidebar-collapsed .sidebar {
+        width: 232px;
+        flex-basis: 232px;
+        opacity: 1;
+        visibility: visible;
+        padding: 16px 10px;
+    }
+}
+/* 管理后台视图：全高 iframe */
+.vue-main .admin-view {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    width: 100%;
+}
+
+.vue-main .admin-frame {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 70vh;
+    border: 0;
+    border-radius: var(--OverlayCornerRadius);
+    background: var(--card-bg);
+}
+
+/* 后台页里不要让 body 的居中布局影响 */
+body.admin-mode .app-shell {
+    height: 100%;
+}
