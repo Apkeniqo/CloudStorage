@@ -73,13 +73,11 @@ export const Sidebar = {
     name: 'WinUISidebar',
     setup() {
         const navs = computed(() => {
-            const list = [
+            return [
                 { key: 'home', icon: 'home', label: '主页' },
                 { key: 'files', icon: 'files', label: '我的文件' },
                 { key: 'trash', icon: 'trash', label: '回收站' }
             ];
-            if (state.isAdmin) list.push({ key: 'admin', icon: 'admin', label: '管理后台' });
-            return list;
         });
 
         const navRef = ref(null);
@@ -168,6 +166,19 @@ export const Sidebar = {
                     h('span', { class: 'side-item-icon' }, [h(WinIcon, { name: 'background', size: 18 })]),
                     h('span', { class: 'side-item-label' }, '背景')
                 ])),
+                state.isAdmin ? h(Button, {
+                    class: 'side-item side-action' + (state.view === 'admin' ? ' active' : ''),
+                    Background: 'transparent', BorderThickness: 0, Height: 36, MinHeight: 36,
+                    onClick: () => {
+                        navTo('admin');
+                        if (window.innerWidth <= 900 && typeof window.closeSidebar === 'function') {
+                            window.closeSidebar();
+                        }
+                    }
+                }, () => h('span', { class: 'side-item-inner' }, [
+                    h('span', { class: 'side-item-icon' }, [h(WinIcon, { name: 'admin', size: 18 })]),
+                    h('span', { class: 'side-item-label' }, '管理后台')
+                ])) : null,
                 h(Button, {
                     class: 'side-item side-action',
                     Background: 'transparent', BorderThickness: 0, Height: 36, MinHeight: 36,
