@@ -4,140 +4,265 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 - CloudStorage</title>
-    <link rel="stylesheet" href="/static/Style.css">
+    <link rel="stylesheet" href="/static/vendor/winuionweb/style.css">
     <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f3f3f3;
+            font-family: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI',
+                         'Microsoft YaHei UI', sans-serif;
+        }
+
+        body.theme-dark {
+            background: #202020;
+        }
+
+        #app {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
         .login-card {
             width: 100%;
             max-width: 360px;
-            background: var(--card-bg);
+            padding: 32px 28px;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.70);
+            border: 1px solid rgba(0, 0, 0, 0.0578);
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
             backdrop-filter: blur(30px) saturate(1.25);
             -webkit-backdrop-filter: blur(30px) saturate(1.25);
-            border: 1px solid var(--card-stroke);
-            border-radius: var(--OverlayCornerRadius);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-            padding: 32px 28px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
         }
 
-        .login-card h1 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 600;
+        .theme-dark .login-card {
+            background: rgba(255, 255, 255, 0.0512);
+            border-color: rgba(0, 0, 0, 0.10);
+        }
+
+        .login-card .head {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+
+        .login-card .head svg {
+            width: 22px;
+            height: 22px;
+            fill: #0067c0;
+        }
+
+        .theme-dark .login-card .head svg {
+            fill: #4cc2ff;
         }
 
         .login-card .hint {
-            margin: 0 0 4px;
+            margin: 0 0 16px;
             font-size: 13px;
-            color: var(--text-secondary);
+            color: rgba(0, 0, 0, 0.62);
         }
 
-        /* WinUI TextBox */
-        .login-card input[type="text"],
-        .login-card input[type="password"] {
-            width: 100%;
-            box-sizing: border-box;
-            min-height: var(--ControlHeight);
-            padding: 0 12px;
-            font-size: var(--ControlContentThemeFontSize);
-            font-family: inherit;
-            color: var(--text-primary);
-            background: var(--ctrl-fill-default);
-            border: 1px solid var(--ctrl-border);
-            border-bottom-color: var(--ctrl-border-accent);
-            border-radius: var(--ControlCornerRadius);
-            outline: none;
-            transition: background-color var(--duration-fast) var(--fast-out-slow-in),
-                        border-color var(--duration-fast) var(--fast-out-slow-in);
+        .theme-dark .login-card .hint {
+            color: rgba(255, 255, 255, 0.77);
         }
 
-        .login-card input[type="text"]:hover,
-        .login-card input[type="password"]:hover {
-            background: var(--ctrl-fill-secondary);
+        .login-card .field {
+            margin-bottom: 12px;
         }
 
-        .login-card input[type="text"]:focus,
-        .login-card input[type="password"]:focus {
-            background: var(--ctrl-fill-input-active);
-            border-color: var(--ctrl-border);
-            border-bottom-color: var(--accent-base);
-            box-shadow: inset 0 -1px 0 0 var(--accent-base);
+        .login-card .submit-row {
+            margin-top: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
-        /* WinUI AccentButton */
-        .login-card button {
-            min-height: 34px;
-            padding: 0 12px;
-            font-size: var(--ControlContentThemeFontSize);
-            font-family: inherit;
-            font-weight: 600;
-            color: var(--accent-text);
-            background: var(--accent-base);
-            border: 1px solid transparent;
-            border-radius: var(--ControlCornerRadius);
-            cursor: pointer;
-            transition: background-color var(--duration-fast) var(--fast-out-slow-in);
-        }
-
-        .login-card button:hover {
-            background: var(--accent-hover);
-        }
-
-        .login-card button:active {
-            background: var(--accent-pressed);
-            color: var(--accent-text-secondary);
-        }
-
-        .login-card .error {
-            font-size: 13px;
-            color: var(--critical-bg);
-        }
-.guest-link {
-            display: block;
-            margin-top: 12px;
+        .login-card .guest {
             text-align: center;
             font-size: 13px;
-            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .login-card .guest a {
+            color: #0067c0;
             text-decoration: none;
         }
 
-        .guest-link:hover {
-            color: var(--accent-color);
-            text-decoration: underline;
+        .theme-dark .login-card .guest a {
+            color: #4cc2ff;
         }
 
+        #err-empty {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <form class="login-card" method="post">
-        <h1>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--accent-color)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z"/></svg>
-            云端文件
-        </h1>
-        <p class="hint">使用账号密码登录</p>
-        <input type="text" name="username" placeholder="用户名" value="{{ username }}" autofocus autocomplete="username">
-        <input type="password" name="password" placeholder="密码" autocomplete="current-password">
+<div id="app"></div>
+
+<!-- 原生表单：Vue 组件只负责界面，提交仍走标准 POST，保证无脚本时也可用 -->
+<form id="login-form" method="post" style="display:none">
+    <input type="hidden" name="username" id="form-username">
+    <input type="hidden" name="password" id="form-password">
+    <input type="hidden" name="next" value="{{ next }}">
+</form>
+
+<noscript>
+    <style>
+        #app { display: none; }
+    </style>
+    <form class="login-card" method="post" style="margin:auto">
+        <p class="hint">请启用 JavaScript，或直接输入账号密码登录</p>
+        <input type="text" name="username" placeholder="用户名" style="width:100%;margin-bottom:8px">
+        <input type="password" name="password" placeholder="密码" style="width:100%;margin-bottom:12px">
         <input type="hidden" name="next" value="{{ next }}">
-        {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        <button type="submit">登录</button>
-
-        {% if guest_browse %}
-        <a class="guest-link" href="/guest-login">以访客身份浏览（只读）</a>
-        {% endif %}
+        <button type="submit" style="width:100%">登录</button>
     </form>
+</noscript>
 
-    <script>
-        // 跟随主界面的主题设置
-        (function () {
-            var saved = localStorage.getItem('fluent_theme') || 'system';
-            var dark = saved === 'dark' ||
-                (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-            document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-        })();
-    </script>
+<script type="importmap">
+{
+  "imports": {
+    "vue": "/static/vendor/vue.esm-browser.prod.js",
+    "mathlive/ssr": "/static/vendor/mathlive-ssr-shim.js",
+    "winuionweb": "/static/vendor/winuionweb/index.js"
+  }
+}
+</script>
+
+<script type="module">
+const initial = {
+    username: {{ username|tojson }},
+    error: {{ error|tojson }},
+    guestBrowse: {{ 'true' if guest_browse else 'false' }}
+};
+
+// 与主界面一致的主题选择
+(function () {
+    const saved = localStorage.getItem('fluent_theme') || 'system';
+    const dark = saved === 'dark' ||
+        (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.classList.toggle('theme-dark', dark);
+})();
+
+try {
+    const { createApp, h, ref } = await import('vue');
+    const wuw = await import('winuionweb');
+    const { Button, TextBlock, TextBox, PasswordBox, InfoBar } = wuw;
+    const WinUIOnWeb = wuw.default || wuw.WinUIOnWeb;
+
+    const dark = document.body.classList.contains('theme-dark');
+    const scopeClass = 'win-theme-scope ' + (dark ? 'theme-dark' : 'theme-light');
+
+    const Login = {
+        setup() {
+            const username = ref(initial.username || '');
+            const password = ref('');
+            const error = ref(initial.error || '');
+            let submitting = false;
+
+            function submit() {
+                if (submitting) return;
+                if (!username.value || !password.value) {
+                    error.value = '请输入用户名和密码';
+                    return;
+                }
+                submitting = true;
+                document.getElementById('form-username').value = username.value;
+                document.getElementById('form-password').value = password.value;
+                document.getElementById('login-form').submit();
+            }
+
+            return () => h('div', { class: scopeClass }, [
+                h('div', { class: 'login-card' }, [
+                    h('div', { class: 'head' }, [
+                        h('svg', { viewBox: '0 0 24 24' }, [
+                            h('path', {
+                                d: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 ' +
+                                   '5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 ' +
+                                   '0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 ' +
+                                   '0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 ' +
+                                   '7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 ' +
+                                   '1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z'
+                            })
+                        ]),
+                        h(TextBlock, { Text: '云端文件', FontSize: 20, FontWeight: 'SemiBold' })
+                    ]),
+                    h('p', { class: 'hint' }, '使用账号密码登录'),
+
+                    h('div', { class: 'field' }, [
+                        h(TextBox, {
+                            PlaceholderText: '用户名',
+                            Text: username.value,
+                            'onUpdate:Text': (v) => { username.value = v; error.value = ''; }
+                        })
+                    ]),
+                    h('div', { class: 'field' }, [
+                        h(PasswordBox, {
+                            PlaceholderText: '密码',
+                            Password: password.value,
+                            'onUpdate:Password': (v) => { password.value = v; error.value = ''; }
+                        })
+                    ]),
+
+                    h('div', { class: 'submit-row' }, [
+                        h(Button, {
+                            Content: '登录',
+                            Style: 'AccentButtonStyle',
+                            Width: '100%',
+                            MinHeight: 34,
+                            Command: submit,
+                            onClick: submit
+                        })
+                    ]),
+
+                    error.value
+                        ? h(InfoBar, {
+                            Title: '登录失败',
+                            Message: error.value,
+                            Severity: 'Error',
+                            IsOpen: true,
+                            IsClosable: false,
+                            style: 'margin-top:12px'
+                          })
+                        : null,
+
+                    initial.guestBrowse
+                        ? h('div', { class: 'guest' }, [
+                            h('a', { href: '/guest-login' }, '以访客身份浏览（只读）')
+                          ])
+                        : null
+                ])
+            ]);
+        }
+    };
+
+    const app = createApp(Login);
+    if (WinUIOnWeb) app.use(WinUIOnWeb, { locale: 'zh-CN' });
+    app.mount('#app');
+} catch (e) {
+    // 组件加载失败时回退到原生表单，保证仍能登录
+    console.error(e);
+    document.getElementById('app').innerHTML = '';
+    const form = document.getElementById('login-form');
+    form.style.display = 'block';
+    form.innerHTML =
+        '<div style="padding:24px;max-width:360px;margin:0 auto;font-family:Segoe UI,sans-serif">' +
+        '<p style="color:#c42b1c;font-size:13px">界面组件加载失败，已回退到基础表单。</p>' +
+        '<input type="text" name="username" placeholder="用户名" style="width:100%;margin-bottom:8px">' +
+        '<input type="password" name="password" placeholder="密码" style="width:100%;margin-bottom:12px">' +
+        '<input type="hidden" name="next" value="{{ next }}">' +
+        '<button type="submit" style="width:100%">登录</button></div>';
+}
+</script>
 </body>
 </html>

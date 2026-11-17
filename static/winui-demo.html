@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WinUI 组件验证</title>
+    <link rel="stylesheet" href="/static/vendor/winuionweb/style.css">
+    <style>
+        body { margin: 0; padding: 24px; font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif; }
+        #app { max-width: 720px; }
+        .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+        #err { color: #c42b1c; white-space: pre-wrap; font: 12px/1.5 Consolas, monospace; }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+<pre id="err"></pre>
+
+<script type="importmap">
+{
+  "imports": {
+    "vue": "/static/vendor/vue.esm-browser.prod.js",
+    "mathlive/ssr": "/static/vendor/mathlive-ssr-shim.js",
+    "winuionweb": "/static/vendor/winuionweb/index.js"
+  }
+}
+</script>
+
+<script type="module">
+const errBox = document.getElementById('err');
+function fail(e) {
+    errBox.textContent += (e && (e.stack || e.message || e)) + '\n\n';
+    console.error(e);
+}
+window.addEventListener('error', (e) => fail(e.message + ' @ ' + e.filename + ':' + e.lineno));
+window.addEventListener('unhandledrejection', (e) => fail(e.reason));
+
+try {
+    const { createApp, h, ref } = await import('vue');
+    const wuw = await import('winuionweb');
+    const { Button, TextBlock, TextBox, CheckBox, ToggleSwitch, ComboBox,
+            ProgressBar, InfoBar, Slider } = wuw;
+    const WinUIOnWeb = wuw.default || wuw.WinUIOnWeb;
+
+    const Demo = {
+        setup() {
+            const text = ref('搜索文件');
+            const checked = ref(true);
+            const toggled = ref(false);
+            const slider = ref(60);
+
+            return () => h('div', { class: 'win-theme-scope theme-light' }, [
+                h(TextBlock, { Text: 'WinUI on Web 组件', FontSize: 28 }),
+                h('div', { class: 'row', style: 'margin:16px 0' }, [
+                    h(Button, { Content: '默认按钮' }),
+                    h(Button, { Content: '强调按钮', Style: 'AccentButtonStyle' }),
+                ]),
+                h('div', { class: 'row' }, [
+                    h(TextBox, {
+                        Text: text.value,
+                        PlaceholderText: '搜索',
+                        Width: 280,
+                        'onUpdate:Text': (v) => { text.value = v; }
+                    }),
+                    h(TextBlock, { Text: '文本框：' + text.value }),
+                ]),
+                h('div', { class: 'row' }, [
+                    h(CheckBox, {
+                        Content: '复选框',
+                        IsChecked: checked.value,
+                        'onUpdate:IsChecked': (v) => { checked.value = v; }
+                    }),
+                    h(ToggleSwitch, {
+                        Header: '开关',
+                        IsOn: toggled.value,
+                        'onUpdate:IsOn': (v) => { toggled.value = v; }
+                    }),
+                ]),
+                h('div', { class: 'row' }, [
+                    h(ComboBox, {
+                        Header: '下拉框',
+                        PlaceholderText: '请选择',
+                        Width: 220,
+                        ItemsSource: ['选项一', '选项二', '选项三']
+                    }),
+                ]),
+                h('div', { class: 'row' }, [
+                    h(ProgressBar, { Value: 45, Maximum: 100, Width: 260 }),
+                    h(Slider, {
+                        Value: slider.value, Minimum: 0, Maximum: 100, Width: 220,
+                        'onUpdate:Value': (v) => { slider.value = v; }
+                    }),
+                ]),
+                h(InfoBar, {
+                    Title: '提示',
+                    Message: '这是 WinUI InfoBar 组件',
+                    Severity: 'Informational',
+                    IsOpen: true,
+                    style: 'margin-top:16px'
+                }),
+            ]);
+        }
+    };
+
+    const app = createApp(Demo);
+    if (WinUIOnWeb) app.use(WinUIOnWeb, { locale: 'zh-CN' });
+    app.mount('#app');
+    errBox.textContent = 'OK: 组件已挂载';
+} catch (e) {
+    fail(e);
+}
+</script>
+</body>
+</html>

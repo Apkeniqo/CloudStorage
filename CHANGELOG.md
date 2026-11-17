@@ -360,3 +360,17 @@
 - **拖拽遮罩 / 上传提示**：淡入淡出 167ms
 - **减少动画**：遵循系统 `prefers-reduced-motion`，此时全部动画降为 1ms
 - 滚动区域加 `scroll-behavior: smooth`（对齐 ScrollViewer 平滑滚动）
+## beta 2026.1117.1 — 接入 WinUIonWeb 组件库（登录页首批迁移）
+
+按需求改用 [winuionweb](https://www.npmjs.com/package/winuionweb)（WinUIonWeb 发布的 Vue 3 组件库）替代手写控件：
+
+- **静态接入，无需构建**：把组件库与 Vue 运行时放进 `static/vendor/`，页面用 `importmap` 直接加载 ESM
+  - `vue.esm-browser.prod.js`（165 KB）
+  - `winuionweb/index.js`（2.3 MB）+ `winuionweb/style.css`（473 KB）
+  - `mathlive-ssr-shim.js`：组件库只对数学公式控件用到 MathLive，用 10 行垫片替代 2 MB 运行时
+- **登录页**改用组件渲染：`TextBlock` / `TextBox` / `PasswordBox` / `Button`（AccentButtonStyle）/ `InfoBar`
+  - 提交仍走原生 `<form method="post">`（组件只负责界面，值写入隐藏域后原生提交），登录行为与之前完全一致（实测 302 → /）
+  - 错误提示改为 `InfoBar`（Severity=Error），带图标与红色语义背景
+  - 增加了 `<noscript>` 回退与「组件加载失败回退到基础表单」兜底
+- 新增 `/static/winui-demo.html` 组件样例页，可直接查看 Button / TextBox / CheckBox / ToggleSwitch / ComboBox / Slider / ProgressBar / InfoBar 的实际渲染
+- 说明：文件列表、工具栏、后台页面仍由现有实现渲染，后续可按页面逐步迁移（列表涉及上传/拖拽/多选，需单独排期）
