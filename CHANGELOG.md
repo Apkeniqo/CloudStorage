@@ -881,3 +881,32 @@ proxy  = https://gh.dpik.top      # 默认值，可留空表示不用代理
 正常代理   3 个文件经代理下载成功           15.6s
 坏代理     首个文件失败 -> 熔断 -> 剩余走 API  5.0s   3 个文件全部成功
 ```
+## beta 2026.1117.40 — 更新脚本支持多加速节点
+
+从 `https://github.akams.cn/` 页面抓到了它的节点池（页面会用每个节点探活一次 `raw.githubusercontent.com`，从网络请求里提取出节点域名）。
+
+**实测可用性**（拉 `version.py`）：
+
+| 节点 | 结果 | 耗时 |
+|---|---|---|
+| https://tvv.tw | ✓ 699 字节 | 1.25s |
+| https://gh.dpik.top | ✓ 699 字节 | 1.32s |
+| https://git.yylx.win | ✓ 699 字节 | 2.26s |
+| https://ghproxy.net | ✓ 699 字节 | 4.23s |
+| j.1lin.dpdns.org / gh.bugdey.us.kg / github.starrlzy.cn / j.1win.ggff.net | 连接失败 | — |
+| cdn.gh-proxy.com | 302 跳转 | — |
+| github-proxy.memory-echoes.cn | 429 限流 | — |
+
+**改动**：
+
+- `proxy` 支持**逗号分隔多节点**，内置默认值 `tvv.tw, gh.dpik.top, git.yylx.win, ghproxy.net`
+- 逐个节点尝试，失败的节点本次运行内直接拉黑（`_BAD_NODES`），不会每个文件都重试一遍
+- 单节点超时 60s → **20s**，坏节点不会拖住整体
+- 全部节点失效才回退 `api.github.com`
+
+**实测**（4 个文件）：
+
+```
+nodes = ['https://tvv.tw', 'https://gh.dpik.top', 'https://git.yylx.win', 'https://ghproxy.net']
+下载 4/4 完成，15.7s，坏节点：set()   ← 第一个节点就成功
+```
