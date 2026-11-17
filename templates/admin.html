@@ -225,19 +225,6 @@
 
         .field:last-of-type { border-bottom: none; }
 
-        /* 有背景图时，卡片要用更实的底色，和主界面文件容器保持一致 */
-        body.has-bg .card {
-            background: color-mix(in srgb,
-                rgba(18, 20, 26, 0.78) var(--panel-alpha, 100%),
-                transparent);
-        }
-
-        html:not([data-theme="dark"]) body.has-bg .card {
-            background: color-mix(in srgb,
-                rgba(255, 255, 255, 0.84) var(--panel-alpha, 100%),
-                transparent);
-        }
-
         .field .label {
             font-size: 13px;
             padding-top: 7px;
@@ -1086,23 +1073,16 @@
     loadUsers();
     loadEvents();
     (function () {
-        // 嵌在主界面里时，主动跟随父窗口的主题与外观变量（不依赖父页面是否同步过来）
+        // 嵌在主界面里时，主动跟随父窗口的主题（不依赖父页面推送）
         (function () {
             if (location.search.indexOf('embed=1') < 0) return;
             function follow() {
                 try {
-                    var topDoc = window.top.document;
-                    var t = topDoc.documentElement.getAttribute('data-theme');
+                    var t = window.top.document.documentElement.getAttribute('data-theme');
                     if (t && t !== document.documentElement.getAttribute('data-theme')) {
                         document.documentElement.setAttribute('data-theme', t);
                     }
-                    if (topDoc.body && document.body) {
-                        var hasBg = topDoc.body.classList.contains('has-bg');
-                        if (hasBg !== document.body.classList.contains('has-bg')) {
-                            document.body.classList.toggle('has-bg', hasBg);
-                        }
-                    }
-                } catch (e) { /* 跨域或父窗口未就绪时忽略 */ }
+                } catch (e) { /* 父窗口未就绪时忽略 */ }
             }
             follow();
             setInterval(follow, 600);

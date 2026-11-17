@@ -820,3 +820,20 @@ iframe body class            "embed has-bg"
 浅色 + 背景图   frame=light  card=color(srgb 1 1 1 / 0.839)   文字 rgba(0,0,0,.89)
 深色 + 背景图   frame=dark   card=color(srgb .0706 .0784 .102 / .780)  文字 rgb(255,255,255)
 ```
+## beta 2026.1117.37 — 颜色回到 1117.33，主界面容器改成后台的样子
+
+按需求把颜色相关的改动回退到 `1117.33`，然后反过来让**主界面**去对齐后台：
+
+- **回退**：`.admin-view` 恢复成自己也画一层 `--card-bg`（后台 = 外层 + iframe 内卡片，两层叠加）；`admin.html` 去掉 `has-bg` 期间的卡片加深规则；主界面不再在背景图模式下单独加深
+- **主界面对齐**：`.file-list-container` / `.file-header` / `.modal-card` / `.upload-toast` 改成「`background-color` + `background-image` 渐变」两层同色叠加，和后台的「外层 + 卡片」结构一致
+
+实测（深色，两层 5% 白）：
+
+```
+主界面  background-color: color(srgb 1 1 1 / 0.0510)
+        background-image: linear-gradient(同色, 同色)      ← 两层
+后台    .admin-view: color(srgb 1 1 1 / 0.0510)
+        .card     : color(srgb 1 1 1 / 0.0510)            ← 两层
+```
+
+**保留的功能改进**（不影响颜色）：静态资源 `no-cache`、iframe 自己跟随父窗口主题、进入后台时补一次外观同步。

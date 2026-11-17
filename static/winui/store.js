@@ -385,7 +385,6 @@ export function applyAppearance(me) {
 
 export function applyBackground(has) {
     document.body.classList.toggle('has-bg', !!has);
-    syncFrameVars();
     if (has) {
         document.body.style.setProperty('--bg-image',
             "url('/prefs/background?v=" + Date.now() + "')");
@@ -412,8 +411,6 @@ export function syncFrameVars() {
     const root = doc.documentElement;
     // 主题跟随主界面（iframe 只在加载时读过一次 localStorage）
     root.setAttribute('data-theme', state.dark ? 'dark' : 'light');
-    // 背景图模式：主界面会把卡片底色换成更实的深/浅底，后台也要跟上
-    if (doc.body) doc.body.classList.toggle('has-bg', state.hasBackground);
     root.style.setProperty('--bg-opacity', String(state.bgOpacity / 100));
     root.style.setProperty('--panel-alpha', state.panelOpacity + '%');
     root.style.setProperty('--panel-blur', state.blurPanel + 'px');

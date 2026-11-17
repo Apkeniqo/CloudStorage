@@ -2061,13 +2061,7 @@ body.has-bg .app-shell {
 }
 
 /* 有自定义背景时，文件面板加厚一点，保证文字可读 */
-body.has-bg .file-list-container {
-    background: rgba(18, 20, 26, 0.78);
-}
-
-html:not([data-theme="dark"]) body.has-bg .file-list-container {
-    background: rgba(255, 255, 255, 0.84);
-}
+/* 背景图模式沿用通用卡片底色，与后台一致 */
 /* 低分辨率背景放大时平滑插值，避免出现马赛克 */
 body.has-bg::before {
     image-rendering: auto;
@@ -3354,9 +3348,13 @@ body.sidebar-collapsed .app-shell {
 .admin-view.show {
     display: flex;
     flex-direction: column;
-    /* 外层只负责裁剪圆角：背景由 iframe 里的卡片提供，避免两层卡片色叠加
-       （之前这里也画一层 --card-bg，和内部 .card 叠起来明显比主界面亮） */
-    background: transparent;
+    /* 与主界面文件容器一致：跟随容器不透明度与模糊度 */
+    background: color-mix(in srgb,
+        var(--card-bg) var(--panel-alpha, 100%),
+        transparent);
+    backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
+    -webkit-backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
+    border: 1px solid var(--card-stroke);
     border-radius: var(--OverlayCornerRadius);
     overflow: hidden;
     animation: vueViewEnter var(--duration-normal) var(--ease-standard) both;
@@ -3483,9 +3481,15 @@ body.has-bg::before {
 .modal-mask .modal-card,
 .upload-toast,
 .vue-main .file-header {
-    background: color-mix(in srgb,
+    /* 与后台一致：后台是「外层 + 卡片」两层半透明叠加，这里用 background-image
+       再叠一层同色，两边看起来才一致 */
+    background-color: color-mix(in srgb,
         var(--card-bg) var(--panel-alpha, 100%),
         transparent);
+    background-image: linear-gradient(
+        color-mix(in srgb, var(--card-bg) var(--panel-alpha, 100%), transparent),
+        color-mix(in srgb, var(--card-bg) var(--panel-alpha, 100%), transparent)
+    );
 }
 
 /* 侧栏存储块保持原样，不参与容器不透明度 */
@@ -3493,19 +3497,7 @@ body.has-bg::before {
     background: transparent;
 }
 
-body.has-bg .file-list-container,
-body.has-bg .modal-card {
-    background: color-mix(in srgb,
-        rgba(18, 20, 26, 0.78) var(--panel-alpha, 100%),
-        transparent);
-}
-
-html:not([data-theme="dark"]) body.has-bg .file-list-container,
-html:not([data-theme="dark"]) body.has-bg .modal-card {
-    background: color-mix(in srgb,
-        rgba(255, 255, 255, 0.84) var(--panel-alpha, 100%),
-        transparent);
-}
+/* 背景图模式下不再单独加深：与后台保持同一套底色（透出背景图） */
 
 /* 后台弹窗里的滑块排布 */
 .bg-card .bg-slider-row {
