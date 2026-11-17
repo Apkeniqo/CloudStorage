@@ -1966,11 +1966,8 @@ body.trash-mode #file-input {
     padding: 12px 16px 8px;
 }
 
-body.admin-mode .admin-panel {
-    display: flex;
-}
-
-body.admin-mode .main-pane .container {
+/* 旧版 App.js 的整页后台容器，已被组件化后台取代，保留规则但不影响布局 */
+.admin-panel {
     display: none;
 }
 
@@ -3328,18 +3325,19 @@ body.sidebar-collapsed .app-shell {
         padding: 16px 10px;
     }
 }
-/* 管理后台：Teleport 到 body 的整窗覆盖层 */
+/* 主内容区需要成为定位基准 */
+.vue-main {
+    position: relative;
+}
+
+/* 管理后台：嵌在主内容区（侧栏、工具栏照常可见） */
 .admin-view {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    z-index: 1400;
-    display: flex !important;
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 10px 12px 12px;
     background: var(--bg-color, #202020);
     box-sizing: border-box;
 }

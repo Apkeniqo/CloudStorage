@@ -37,29 +37,27 @@ const App = {
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),
 
-            // 管理后台：Teleport 到 body，彻底脱离容器布局与 overflow 裁剪
+            // 管理后台：嵌在主内容区里显示（侧栏与工具栏保持可见）
             state.view === 'admin'
-                ? h(Teleport, { to: 'body' }, [
-                    h('div', { class: 'admin-view' }, [
-                        h('div', { class: 'admin-bar' }, [
-                            h(Button, {
-                                class: 'admin-back',
-                                Content: '← 返回文件列表',
-                                onClick: () => {
-                                    state.view = 'files';
-                                    state.crumbs = [{ name: '主页', path: '' }];
-                                    loadFiles('');
-                                }
-                            }),
-                            h('span', { class: 'admin-title' }, '管理后台')
-                        ]),
-                        h('iframe', {
-                            id: 'admin-frame',
-                            class: 'admin-frame',
-                            src: '/admin?embed=1',
-                            title: '管理后台'
-                        })
-                    ])
+                ? h('div', { class: 'admin-view' }, [
+                    h('div', { class: 'admin-bar' }, [
+                        h(Button, {
+                            class: 'admin-back',
+                            Content: '← 返回文件列表',
+                            onClick: () => {
+                                state.view = 'files';
+                                state.crumbs = [{ name: '主页', path: '' }];
+                                loadFiles('');
+                            }
+                        }),
+                        h('span', { class: 'admin-title' }, '管理后台')
+                    ]),
+                    h('iframe', {
+                        id: 'admin-frame',
+                        class: 'admin-frame',
+                        src: '/admin?embed=1',
+                        title: '管理后台'
+                    })
                 ])
                 : h('div', {
                     class: 'file-list-container ' + (state.viewMode === 'grid' ? 'view-grid' : 'view-list'),

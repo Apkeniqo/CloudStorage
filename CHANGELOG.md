@@ -506,3 +506,21 @@
 **登录卡片**：480px 收回到 **400px**（内边距 36/32），避免矫枉过正。
 
 **探针工具**：新增 `tools/probe.mjs`（CDP 驱动，可登录、点击、读 DOM 尺寸、截图），以后能实测而非靠猜。
+## beta 2026.1117.15 — 后台嵌回主内容区
+
+不再整窗覆盖，也不再单独一页：管理后台**嵌在主内容区**显示，侧栏、搜索、工具栏都还在。
+
+**第二个根因（又一条旧规则）**：`body.admin-mode .main-pane .container { display: none }` 是旧版 App.js 把后台铺满整页时留下的，它把整个内容容器隐藏了 —— 所以后台视图无论怎么定位都是 0×0。这条规则已删除。
+
+实测（CDP 探针，登录态）：
+
+`
+#winui-app   : 1166×822
+.vue-main    : 1166×822  (position: relative)
+.admin-view  : 1166×822  (position: absolute, inset: 0)
+#admin-frame : 1166×774
+`
+
+- `.vue-main` 设为 `position: relative`，`.admin-view` 用 `absolute; inset: 0` 填满内容区
+- 顶部「← 返回文件列表」+ 标题，iframe 填满剩余高度
+- 分享/背景弹窗、上传面板、右下角提示仍 Teleport 到 body（这些是真正的浮层，需要相对视口）
