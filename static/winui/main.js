@@ -1,9 +1,9 @@
 // 应用入口：组装根组件、上传、拖拽、实时刷新
 
 import { createApp, h, watch, onMounted, nextTick } from 'vue';
-import WinUIOnWeb from 'winuionweb';
+import WinUIOnWeb, { Button } from 'winuionweb';
 import {
-    state, init, reload, visibleFiles, formatTime,
+    state, init, reload, visibleFiles, formatTime, loadFiles,
     uploadBackgroundFile, toast
 } from './store.js';
 import { addFiles } from './upload.js';
@@ -37,9 +37,21 @@ const App = {
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),
 
-            // 管理后台：独立全高 iframe，避免被列表容器的布局影响
+            // 管理后台：整窗覆盖的 iframe（不受外部布局影响）
             state.view === 'admin'
                 ? h('div', { class: 'admin-view' }, [
+                    h('div', { class: 'admin-bar' }, [
+                        h(Button, {
+                            class: 'admin-back',
+                            Content: '← 返回文件列表',
+                            onClick: () => {
+                                state.view = 'files';
+                                state.crumbs = [{ name: '主页', path: '' }];
+                                loadFiles('');
+                            }
+                        }),
+                        h('span', { class: 'admin-title' }, '管理后台')
+                    ]),
                     h('iframe', {
                         id: 'admin-frame',
                         class: 'admin-frame',

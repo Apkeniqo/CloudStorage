@@ -191,8 +191,8 @@ export function navTo(view) {
         return loadTrash();
     }
     if (view === 'admin') {
-        // 直接进入后台页面（iframe 在不同布局下容易被压成空白）
-        window.location.href = '/admin';
+        state.view = 'admin';
+        state.crumbs = [{ name: '管理后台', path: '' }];
         return Promise.resolve();
     }
     state.view = 'files';

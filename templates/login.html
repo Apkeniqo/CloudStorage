@@ -30,10 +30,17 @@
             justify-content: center;
         }
 
+        /* Vue 的根节点是主题作用域 div，必须撑满，否则卡片会被压成内容宽度 */
+        #app > div {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
         .login-card {
             width: 100%;
-            max-width: 380px;
-            padding: 34px 30px;
+            max-width: 480px;
+            padding: 40px 36px;
             box-sizing: border-box;
             background: rgba(255, 255, 255, 0.70);
             border: 1px solid rgba(0, 0, 0, 0.0578);
@@ -52,7 +59,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
 
         .login-card .head svg {
@@ -66,8 +73,8 @@
         }
 
         .login-card .hint {
-            margin: 0 0 16px;
-            font-size: 13px;
+            margin: 0 0 22px;
+            font-size: 14px;
             color: rgba(0, 0, 0, 0.62);
         }
 
@@ -76,11 +83,11 @@
         }
 
         .login-card .field {
-            margin-bottom: 12px;
+            margin-bottom: 14px;
         }
 
         .login-card .submit-row {
-            margin-top: 18px;
+            margin-top: 24px;
             display: flex;
             flex-direction: column;
             gap: 10px;

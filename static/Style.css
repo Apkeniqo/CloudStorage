@@ -3328,29 +3328,48 @@ body.sidebar-collapsed .app-shell {
         padding: 16px 10px;
     }
 }
-/* 管理后台视图：显式高度，避免任何 flex 塌陷导致空白 */
+/* 管理后台：整窗覆盖，绝不依赖父容器高度 */
 .vue-main .admin-view {
-    flex: 1 1 auto;
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
     display: flex;
-    width: 100%;
-    height: calc(100vh - 132px);
-    min-height: 520px;
-    position: relative;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    background: var(--bg-color, #202020);
+    box-sizing: border-box;
+}
+
+.vue-main .admin-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 40px;
+}
+
+.vue-main .admin-back {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 14px !important;
+    font-size: 13px !important;
+}
+
+.vue-main .admin-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
 }
 
 .vue-main .admin-frame {
     flex: 1 1 auto;
     width: 100%;
-    height: 100%;
-    min-height: 520px;
+    min-height: 0;
     border: 0;
     border-radius: var(--OverlayCornerRadius);
     background: var(--card-bg);
     display: block;
-}
-
-body.admin-mode .file-list-container {
-    display: none;
 }
 
 /* 后台页里不要让 body 的居中布局影响 */
