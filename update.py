@@ -172,14 +172,20 @@ def fetch_one_node(proxy, repo, branch, path, timeout=20):
     return data
 
 
-def fetch_via_proxy(proxies, repo, branch, path, timeout=20):
-    """按顺序尝试各节点；失败的节点本次运行内不再使用"""
+def fetch_via_proxy(proxies, repo, branch, path, timeout=20, expect_sha=None):
+    """按顺序尝试各节点；失败的节点本次运行内不再使用。
+
+    expect_sha 非空时校验 git blob SHA —— 代理有 CDN 缓存，可能返回旧版本内容。
+    """
     last = None
     for node in proxies:
         if node in _BAD_NODES:
             continue
         try:
-            return fetch_one_node(node, repo, branch, path, timeout)
+            data = fetch_one_node(node, repo, branch, path, timeout)
+            if expect_sha and git_blob_sha(data) != expect_sha:
+                raise ValueError('内容校验不符（代理缓存了旧版本）')
+            return data
         except Exception as e:
             _BAD_NODES.add(node)
             last = e
@@ -294,7 +300,8 @@ def download_tree(api, branch, write=False):
 
         if _PROXY_LIST and len(_BAD_NODES) < len(_PROXY_LIST):
             try:
-                content = fetch_via_proxy(_PROXY_LIST, api.repo, branch, path)
+                content = fetch_via_proxy(_PROXY_LIST, api.repo, branch, path,
+                                          expect_sha=item['sha'])
             except Exception as e:
                 print('  所有加速节点都不可用，本次剩余文件改走 API')
                 content = None
@@ -305,6 +312,8 @@ def download_tree(api, branch, write=False):
                                % (api.repo, item['sha'], urllib.parse.quote(branch, safe='')))
                 content = (base64.b64decode(blob['content'])
                            if blob.get('encoding') == 'base64' else blob['content'].encode())
+                if git_blob_sha(content) != item['sha']:
+                    raise SystemExit('API 返回内容校验不符')
             except SystemExit as e:
                 failed.append((path, str(e)))
                 print('  ✗ %s 下载失败：%s' % (path, e))

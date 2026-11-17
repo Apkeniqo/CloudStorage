@@ -928,3 +928,25 @@ nodes = ['https://tvv.tw', 'https://gh.dpik.top', 'https://git.yylx.win', 'https
 （`gh.dpik.top` 这一轮测速超时，被自动拉黑）
 
 注意：节点快慢会随网络波动，所以每次都重新测，不缓存上一次的结果。
+## beta 2026.1117.43 — 下载后校验内容，挡住代理缓存旧文件
+
+**发现的问题**：代理有 CDN 缓存。`tvv.tw` 返回的 `update.py` 是 `1117.41` 的旧内容（18535 字节），而远端实际是 20371 字节——如果直接写盘，会把文件写回旧版本，而且因为远端 tree 的 SHA 没变，本地每次都会被判定为「需要更新」，陷入反复写入旧内容的循环。
+
+**修法**：下载后立刻算 git blob SHA，与远端 tree 里的 SHA 比对：
+
+```python
+if expect_sha and git_blob_sha(data) != expect_sha:
+    raise ValueError('内容校验不符（代理缓存了旧版本）')
+```
+
+- 代理通道：校验失败 → 该节点拉黑 → 换下一个节点
+- API 通道：同样校验，不符则记为失败
+
+**实测**（故意让 `tvv.tw` 先出手）：
+
+```
+节点 https://tvv.tw 不可用：内容校验不符（代理缓存了旧版本）
+节点 https://gh.dpik.top 不可用：The read operation timed out
+节点 https://git.yylx.win 不可用：The read operation timed out
+下载 20371 字节，SHA 校验：True，含 probe_nodes：True   ← ghproxy.net 成功
+```
