@@ -3328,12 +3328,15 @@ body.sidebar-collapsed .app-shell {
         padding: 16px 10px;
     }
 }
-/* 管理后台：整窗覆盖，绝不依赖父容器高度 */
-.vue-main .admin-view {
-    position: fixed;
-    inset: 0;
+/* 管理后台：Teleport 到 body 的整窗覆盖层 */
+.admin-view {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
     z-index: 1400;
-    display: flex;
+    display: flex !important;
     flex-direction: column;
     gap: 8px;
     padding: 10px 12px 12px;
@@ -3341,7 +3344,7 @@ body.sidebar-collapsed .app-shell {
     box-sizing: border-box;
 }
 
-.vue-main .admin-bar {
+.admin-bar {
     flex: 0 0 auto;
     display: flex;
     align-items: center;
@@ -3349,20 +3352,20 @@ body.sidebar-collapsed .app-shell {
     height: 40px;
 }
 
-.vue-main .admin-back {
+.admin-back {
     min-height: 32px !important;
     height: 32px !important;
     padding: 0 14px !important;
     font-size: 13px !important;
 }
 
-.vue-main .admin-title {
+.admin-title {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-primary);
 }
 
-.vue-main .admin-frame {
+.admin-frame {
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;

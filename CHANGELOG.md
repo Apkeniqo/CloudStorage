@@ -491,3 +491,18 @@
 - `.admin-view { position: fixed; inset: 0; z-index: 1400 }`，内部纵向排列「← 返回文件列表」+ iframe
 - 不再依赖任何父容器高度，`iframe { flex:1; min-height:0 }` 所以在任何布局下都铺满
 - 顶部返回按钮直接切回文件列表
+## beta 2026.1117.14 — 定位根因：position:fixed 被祖先包含块吃掉
+
+**根因（用 CDP 探针实测）**：管理后台视图渲染后 `offsetWidth/Height = 0`。
+
+`.container` 上有 `backdrop-filter: blur()` / `overflow: hidden`，会为后代 `position: fixed` 元素建立 **包含块**，于是 `inset: 0` 不再相对视口，而是相对那个容器——容器在后台视图下高度为 0，整个覆盖层就被压成 0×0：DOM 里有、屏幕上什么都没有。
+
+**修复**：所有 fixed 浮层统一用 Vue `<Teleport to="body">` 挂到 `body` 下，彻底脱离容器的包含块与裁剪：
+
+- 管理后台 `.admin-view`（实测 1600×900，iframe 1576×830）
+- 分享弹窗、背景弹窗（实测 mask 1600×900，父级 BODY）
+- 上传面板、右下角提示
+
+**登录卡片**：480px 收回到 **400px**（内边距 36/32），避免矫枉过正。
+
+**探针工具**：新增 `tools/probe.mjs`（CDP 驱动，可登录、点击、读 DOM 尺寸、截图），以后能实测而非靠猜。

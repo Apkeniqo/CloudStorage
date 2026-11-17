@@ -1,6 +1,6 @@
 // 应用入口：组装根组件、上传、拖拽、实时刷新
 
-import { createApp, h, watch, onMounted, nextTick } from 'vue';
+import { createApp, h, watch, onMounted, nextTick, Teleport } from 'vue';
 import WinUIOnWeb, { Button } from 'winuionweb';
 import {
     state, init, reload, visibleFiles, formatTime, loadFiles,
@@ -37,27 +37,29 @@ const App = {
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),
 
-            // 管理后台：整窗覆盖的 iframe（不受外部布局影响）
+            // 管理后台：Teleport 到 body，彻底脱离容器布局与 overflow 裁剪
             state.view === 'admin'
-                ? h('div', { class: 'admin-view' }, [
-                    h('div', { class: 'admin-bar' }, [
-                        h(Button, {
-                            class: 'admin-back',
-                            Content: '← 返回文件列表',
-                            onClick: () => {
-                                state.view = 'files';
-                                state.crumbs = [{ name: '主页', path: '' }];
-                                loadFiles('');
-                            }
-                        }),
-                        h('span', { class: 'admin-title' }, '管理后台')
-                    ]),
-                    h('iframe', {
-                        id: 'admin-frame',
-                        class: 'admin-frame',
-                        src: '/admin?embed=1',
-                        title: '管理后台'
-                    })
+                ? h(Teleport, { to: 'body' }, [
+                    h('div', { class: 'admin-view' }, [
+                        h('div', { class: 'admin-bar' }, [
+                            h(Button, {
+                                class: 'admin-back',
+                                Content: '← 返回文件列表',
+                                onClick: () => {
+                                    state.view = 'files';
+                                    state.crumbs = [{ name: '主页', path: '' }];
+                                    loadFiles('');
+                                }
+                            }),
+                            h('span', { class: 'admin-title' }, '管理后台')
+                        ]),
+                        h('iframe', {
+                            id: 'admin-frame',
+                            class: 'admin-frame',
+                            src: '/admin?embed=1',
+                            title: '管理后台'
+                        })
+                    ])
                 ])
                 : h('div', {
                     class: 'file-list-container ' + (state.viewMode === 'grid' ? 'view-grid' : 'view-list'),
@@ -77,10 +79,13 @@ const App = {
                     ])
                 ]),
 
-            h(UploadPanel),
-            h(ShareModal),
-            h(BackgroundModal),
-            h(ToastBar)
+            // 所有 fixed 浮层都 Teleport 到 body：
+            // 祖先若有 backdrop-filter / transform / overflow 会成为 containing block，
+            // 导致 position:fixed 被裁剪或压成 0 尺寸
+            h(Teleport, { to: 'body' }, [h(UploadPanel)]),
+            h(Teleport, { to: 'body' }, [h(ShareModal)]),
+            h(Teleport, { to: 'body' }, [h(BackgroundModal)]),
+            h(Teleport, { to: 'body' }, [h(ToastBar)])
         ]);
     }
 };
