@@ -756,3 +756,26 @@ JS 端写变量时改成 `--panel-alpha: 40%`（原来是 `0.4`）。`--bg-opaci
 ```
 
 对比旧逻辑：同样场景要下载全部 37 个文件。
+## beta 2026.1117.34 — 后台卡片颜色与主界面容器一致
+
+**原因**：后台是「两层卡片」叠加——`.admin-view` 外层画了一层 `--card-bg`，iframe 里的 `.card` 又画了一层，两层各 5% 白叠起来约 10%，所以深色下后台明显比主界面亮一些、还发灰。
+
+**修法**：外层只保留圆角裁剪，不再画背景。
+
+```css
+.admin-view.show {
+    background: transparent;   /* 原来是 color-mix(--card-bg ...) */
+    border-radius: var(--OverlayCornerRadius);
+    overflow: hidden;
+}
+```
+
+主界面是「页面背景 + 一层卡片」，后台现在是「页面背景（透过来）+ iframe 内一层卡片」，结构一致。
+
+实测两者计算值完全相同：
+
+```
+主界面 .file-list-container  color(srgb 1 1 1 / 0.0510)  blur(24px) saturate(1.25)
+后台   iframe .card          color(srgb 1 1 1 / 0.0510)  blur(24px) saturate(1.25)
+后台   .admin-view           rgba(0, 0, 0, 0)（透明，只裁剪圆角）
+```

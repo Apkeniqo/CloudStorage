@@ -3354,13 +3354,9 @@ body.sidebar-collapsed .app-shell {
 .admin-view.show {
     display: flex;
     flex-direction: column;
-    /* 与主界面文件容器一致：跟随容器不透明度与模糊度 */
-    background: color-mix(in srgb,
-        var(--card-bg) var(--panel-alpha, 100%),
-        transparent);
-    backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
-    -webkit-backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
-    border: 1px solid var(--card-stroke);
+    /* 外层只负责裁剪圆角：背景由 iframe 里的卡片提供，避免两层卡片色叠加
+       （之前这里也画一层 --card-bg，和内部 .card 叠起来明显比主界面亮） */
+    background: transparent;
     border-radius: var(--OverlayCornerRadius);
     overflow: hidden;
     animation: vueViewEnter var(--duration-normal) var(--ease-standard) both;
