@@ -271,9 +271,24 @@
 
         .field input.invalid { border-color: var(--critical-bg); }
 
-        /* 控件列不用铺满整行：输入框/开关/下拉统一限宽，视觉上和标签列分开 */
+        /* 控件列内容靠右对齐，并限制输入框长度 */
         .field > div:last-child {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-self: end;
+            width: 100%;
             max-width: 380px;
+        }
+
+        .field > div:last-child > input,
+        .field > div:last-child > .win-combo,
+        .field > div:last-child > .win-switch {
+            width: 100%;
+        }
+
+        .field > div:last-child > .win-switch {
+            justify-content: flex-end;
         }
 
         .field input[type="text"],
@@ -582,11 +597,11 @@
             gap: 2px;
             padding: 6px;
             /* WinUI Flyout：半透明 + 亚克力模糊（底色要够透，模糊才看得出来） */
-            /* 用 color-mix 把 flyout 底色稀释到 ~55%，模糊才看得见 */
-            background: color-mix(in srgb,
-                var(--flyout-bg, rgba(44, 44, 44, 0.98)) 55%, transparent);
-            backdrop-filter: blur(30px) saturate(1.6);
-            -webkit-backdrop-filter: blur(30px) saturate(1.6);
+            /* 亚克力：90% 底色 + 24px 模糊；不支持 backdrop-filter 时退化为半透明 */
+            background: rgba(38, 38, 38, 0.90);
+            backdrop-filter: blur(24px) saturate(1.4);
+            -webkit-backdrop-filter: blur(24px) saturate(1.4);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.32);
             border: 1px solid var(--flyout-border, rgba(255, 255, 255, 0.08));
             border-radius: var(--OverlayCornerRadius, 8px);
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
