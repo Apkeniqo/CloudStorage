@@ -225,6 +225,19 @@
 
         .field:last-of-type { border-bottom: none; }
 
+        /* 有背景图时，卡片要用更实的底色，和主界面文件容器保持一致 */
+        body.has-bg .card {
+            background: color-mix(in srgb,
+                rgba(18, 20, 26, 0.78) var(--panel-alpha, 100%),
+                transparent);
+        }
+
+        html:not([data-theme="dark"]) body.has-bg .card {
+            background: color-mix(in srgb,
+                rgba(255, 255, 255, 0.84) var(--panel-alpha, 100%),
+                transparent);
+        }
+
         .field .label {
             font-size: 13px;
             padding-top: 7px;

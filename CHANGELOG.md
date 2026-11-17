@@ -779,3 +779,28 @@ JS 端写变量时改成 `--panel-alpha: 40%`（原来是 `0.4`）。`--bg-opaci
 后台   iframe .card          color(srgb 1 1 1 / 0.0510)  blur(24px) saturate(1.25)
 后台   .admin-view           rgba(0, 0, 0, 0)（透明，只裁剪圆角）
 ```
+## beta 2026.1117.35 — 有背景图时后台卡片底色跟主界面一致
+
+**原因**：有背景图时，主界面容器会改用「更实的底」保证文字可读（深色 `rgba(18,20,26,.78)`、浅色 `rgba(255,255,255,.84)`），这套规则写在 `body.has-bg .file-list-container` 上。后台的 `.card` 没有对应规则，仍是 5% 白的 `--card-bg`——背景图直接透上来，两块区域一眼就能看出不一样。
+
+**修法**：
+
+1. `syncFrameVars()` 把 `has-bg` 类也同步进 iframe 的 `body`（`applyBackground()` 切换背景图时也会同步）
+2. `admin.html` 补上对应规则：
+
+```css
+body.has-bg .card {
+    background: color-mix(in srgb, rgba(18,20,26,.78) var(--panel-alpha,100%), transparent);
+}
+html:not([data-theme="dark"]) body.has-bg .card {
+    background: color-mix(in srgb, rgba(255,255,255,.84) var(--panel-alpha,100%), transparent);
+}
+```
+
+实测（深色 + 有背景图）：
+
+```
+主界面 .file-list-container  color(srgb 0.0706 0.0784 0.102 / 0.780)
+后台   iframe .card          color(srgb 0.0706 0.0784 0.102 / 0.780)   ← 完全一致
+iframe body class            "embed has-bg"
+```
