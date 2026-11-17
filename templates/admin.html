@@ -271,6 +271,22 @@
 
         .field input.invalid { border-color: var(--critical-bg); }
 
+        /* 控件列不用铺满整行：输入框/开关/下拉统一限宽，视觉上和标签列分开 */
+        .field > div:last-child {
+            max-width: 380px;
+        }
+
+        .field input[type="text"],
+        .field input[type="number"],
+        .field input[type="password"] {
+            max-width: 380px;
+        }
+
+        .field .win-combo {
+            max-width: 380px;
+        }
+
+
         .badge {
             font-size: 10.5px;
             padding: 1px 6px;
@@ -565,10 +581,12 @@
             flex-direction: column;
             gap: 2px;
             padding: 6px;
-            /* WinUI Flyout：半透明 + 亚克力模糊 */
-            background: var(--flyout-bg, rgba(44, 44, 44, 0.82));
-            backdrop-filter: blur(30px) saturate(1.25);
-            -webkit-backdrop-filter: blur(30px) saturate(1.25);
+            /* WinUI Flyout：半透明 + 亚克力模糊（底色要够透，模糊才看得出来） */
+            /* 用 color-mix 把 flyout 底色稀释到 ~55%，模糊才看得见 */
+            background: color-mix(in srgb,
+                var(--flyout-bg, rgba(44, 44, 44, 0.98)) 55%, transparent);
+            backdrop-filter: blur(30px) saturate(1.6);
+            -webkit-backdrop-filter: blur(30px) saturate(1.6);
             border: 1px solid var(--flyout-border, rgba(255, 255, 255, 0.08));
             border-radius: var(--OverlayCornerRadius, 8px);
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
@@ -588,7 +606,8 @@
         .win-combo.open .combo-list {
             visibility: visible;
             opacity: 1;
-            transform: translateY(0) scale(1);
+            /* 打开后彻底去掉 transform：带 transform 时部分浏览器会忽略 backdrop-filter */
+            transform: none;
             pointer-events: auto;
             transition: opacity 167ms cubic-bezier(0, 0, 0, 1),
                         transform 167ms cubic-bezier(0, 0, 0, 1);

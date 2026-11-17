@@ -661,3 +661,17 @@
 - **菜单项重叠**：原来 `.combo-item` 只有 `padding: 7px 10px`、相邻项背景直接贴合。现在浮层改用 `flex-direction: column` + `gap: 2px`、内边距 6px，单项 padding 提到 `8px 10px` 并加 `line-height: 1.35`，实测三项高度均 34px、间隔 2px，不再相互压边
 
 实测：`backdrop-filter: blur(30px) saturate(1.25)`；底色 `rgba(44, 44, 44, 0.86)`；item rect 分别为 [596,34] [631,34] [667,34]
+## beta 2026.1117.27 — 下拉模糊真正生效 + 后台输入框限宽
+
+**模糊为什么没效果**：两层原因叠加——
+1. `.combo-list` 用的是 `var(--flyout-bg)`，这个变量本身就是 `rgba(44,44,44,.86)`，86% 不透明，后面根本没多少东西可模糊
+2. 打开态还留着 `transform: translateY(0) scale(1)`（非 none），部分浏览器会因此忽略 `backdrop-filter`
+
+修复：
+- 底色改用 `color-mix(in srgb, var(--flyout-bg) 55%, transparent)` 稀释到约 47% 不透明
+- 打开态 `transform: none`
+- 模糊强度 `blur(30px) saturate(1.6)`
+
+实测 `background: color(srgb 0.1725 0.1725 0.1725 / 0.472)`，浮层下方内容明显透出并虚化。
+
+**输入框变短**：`.field` 是 `220px 1fr` 两列，控件列会铺满整个剩余宽度。现在给控件列和输入框都加 `max-width: 380px`，13 个输入框实测宽度统一 380px，开关/下拉不受影响（开关 99px、下拉 254px）。
