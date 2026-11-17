@@ -195,13 +195,16 @@ export const Breadcrumb = {
     setup() {
         return () => h('nav', { class: 'breadcrumb' }, state.crumbs.map((c, i) => {
             const last = i === state.crumbs.length - 1;
-            const name = i === 0 && !c.path ? '主页' : c.name;
             const nodes = [];
             if (i) nodes.push(h('span', { class: 'crumb-sep' }, '/'));
             nodes.push(h('span', {
                 class: 'crumb' + (last ? ' current' : ''),
-                onClick: () => { if (!last) navigateTo(c.path); }
-            }, name));
+                onClick: () => {
+                    if (last) return;
+                    if (state.view === 'trash' || state.view === 'admin') { navTo('files'); return; }
+                    navigateTo(c.path);
+                }
+            }, c.name || '主页'));
             return nodes;
         }).concat([h('span', { class: 'crumb-sep crumb-trail' }, '/')]));
     }
@@ -257,8 +260,8 @@ function rowActions(file) {
 export const FileList = {
     setup() {
         return () => {
-            if (!state.ready && state.loading) {
-                return h('div', { class: 'empty-state' }, '加载中…');
+            if (state.loading && !visibleFiles.value.length) {
+                return h('div', { class: 'empty-state' }, '正在加载…');
             }
             if (state.error) {
                 return h('div', { class: 'empty-state' }, '加载失败：' + state.error);

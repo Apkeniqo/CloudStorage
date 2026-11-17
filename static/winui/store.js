@@ -170,10 +170,33 @@ export async function loadTrash() {
     }
 }
 
+// 导航：先立刻切换视图状态（给出即时反馈），再去拉数据
 export function navTo(view) {
-    if (view === 'home') return loadRecent();
-    if (view === 'trash') return loadTrash();
-    if (view === 'admin') { state.view = 'admin'; return; }
+    state.search = '';
+    state.selected = [];
+    state.error = '';
+    state.items = [];      // 立即清空，让界面明确显示「正在加载」
+
+    if (view === 'home') {
+        state.view = 'home';
+        state.path = '';
+        state.crumbs = [{ name: '主页', path: '' }];
+        return loadRecent();
+    }
+    if (view === 'trash') {
+        state.view = 'trash';
+        state.path = '';
+        state.crumbs = [{ name: '回收站', path: '' }];
+        return loadTrash();
+    }
+    if (view === 'admin') {
+        state.view = 'admin';
+        state.crumbs = [{ name: '管理后台', path: '' }];
+        return Promise.resolve();
+    }
+    state.view = 'files';
+    state.path = '';
+    state.crumbs = [{ name: '主页', path: '' }];
     return loadFiles('');
 }
 
