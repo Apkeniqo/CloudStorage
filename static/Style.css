@@ -3328,24 +3328,43 @@ body.sidebar-collapsed .app-shell {
         padding: 16px 10px;
     }
 }
-/* 管理后台视图：全高 iframe */
+/* 管理后台视图：显式高度，避免任何 flex 塌陷导致空白 */
 .vue-main .admin-view {
     flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     width: 100%;
+    height: calc(100vh - 132px);
+    min-height: 520px;
+    position: relative;
 }
 
 .vue-main .admin-frame {
     flex: 1 1 auto;
     width: 100%;
-    min-height: 70vh;
+    height: 100%;
+    min-height: 520px;
     border: 0;
     border-radius: var(--OverlayCornerRadius);
     background: var(--card-bg);
+    display: block;
+}
+
+body.admin-mode .file-list-container {
+    display: none;
 }
 
 /* 后台页里不要让 body 的居中布局影响 */
 body.admin-mode .app-shell {
     height: 100%;
+}
+/* 状态栏右侧：项数 + 版本号 */
+.vue-main .status-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.vue-main .status-version {
+    color: var(--text-tertiary);
+    opacity: 0.8;
 }

@@ -59,7 +59,10 @@ const App = {
                 ? null
                 : h('div', { class: 'status-bar' }, [
                     h('span', {}, state.loading ? '正在同步…' : '已同步'),
-                    h('span', {}, visibleFiles.value.length + ' 项')
+                    h('span', { class: 'status-right' }, [
+                        h('span', {}, visibleFiles.value.length + ' 项'),
+                        state.version ? h('span', { class: 'status-version' }, ' · ' + state.version) : null
+                    ])
                 ]),
 
             h(UploadPanel),

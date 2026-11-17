@@ -45,6 +45,7 @@ export const state = reactive({
 
     // 存储信息
     storage: { text: '', title: '', percent: 0 },
+    version: '',
 
     // 弹层
     showShares: false,
@@ -429,6 +430,7 @@ export async function init() {
 export async function refreshStorage() {
     try {
         const data = await api.getVersion();
+        state.version = data.version || '';
         const info = data.storage || {};
         const used = typeof info.used === 'number' ? info.used : 0;
         const percent = typeof info.percent === 'number' ? info.percent : 0;

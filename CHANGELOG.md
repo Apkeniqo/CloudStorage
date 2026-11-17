@@ -469,3 +469,8 @@
 2. **侧边栏折叠没有动画**：之前是 `display:none` 硬切。桌面宽度下改为宽度 / 透明度 / 内边距 250ms 过渡（`.sidebar` 宽度收到 0、透明度淡出），主内容区同时平滑变宽；窄屏抽屉仍用 `transform` 动画
 3. **登录页宽度**：卡片 `max-width` 从 360px 改回原来的 340px，内边距收回到 30/26px
 4. **管理后台看不到**：之前 iframe 塞在 `.file-list-container` 里，容器高度不确定时 iframe 会被压成 0 高。现在管理后台是独立的全高视图（`.admin-view` + `.admin-frame` flex 铺满，`min-height:70vh`），不再受列表容器布局影响
+## beta 2026.1117.11 — 后台视图高度加固 + 状态栏显示版本号
+
+- **管理后台**：`.admin-view` 与 iframe 改为显式高度（`calc(100vh - 132px)` / 最小 520px），彻底避免父容器 flex 塌陷导致 iframe 高 0 而"一片空白"；`admin-mode` 下隐藏列表容器
+- **状态栏版本号**：右下角现在会显示当前运行版本（如 `beta 2026.1117.11`），可用来确认浏览器/服务是否已加载新代码
+- 说明：`index.html` / `login.html` 是 Jinja 模板，**改模板后必须重启 CloudStorage 服务**才会生效（浏览器刷新不够）
