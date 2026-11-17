@@ -42,6 +42,8 @@ export const state = reactive({
     hasBackground: false,
     blurPanel: 24,
     blurBg: 0,
+    bgOpacity: 100,      // 背景图不透明度 %
+    panelOpacity: 100,   // 卡片/容器不透明度 %
 
     // 存储信息
     storage: { text: '', title: '', percent: 0 },
@@ -368,8 +370,11 @@ export function applyAppearance(me) {
     state.hasBackground = !!(me && me.background);
     state.blurPanel = (me && typeof me.blur_panel === 'number') ? me.blur_panel : 24;
     state.blurBg = (me && typeof me.blur_bg === 'number') ? me.blur_bg : 0;
+    state.bgOpacity = (me && typeof me.bg_opacity === 'number') ? me.bg_opacity : 100;
+    state.panelOpacity = (me && typeof me.panel_opacity === 'number') ? me.panel_opacity : 100;
     applyBackground(state.hasBackground);
     applyBlur(state.blurPanel, state.blurBg);
+    applyOpacity(state.bgOpacity, state.panelOpacity);
 }
 
 export function applyBackground(has) {
@@ -389,11 +394,42 @@ export function applyBlur(panel, bg) {
     document.documentElement.style.setProperty('--bg-blur', bg + 'px');
 }
 
+export function applyOpacity(bgOpacity, panelOpacity) {
+    state.bgOpacity = bgOpacity;
+    state.panelOpacity = panelOpacity;
+    document.documentElement.style.setProperty('--bg-opacity', String(bgOpacity / 100));
+    document.documentElement.style.setProperty('--panel-alpha', String(panelOpacity / 100));
+}
+
+let visualTimer = null;
+let pendingVisual = null;
+
+function saveVisualSoon() {
+    pendingVisual = {
+        panel: state.blurPanel,
+        bg: state.blurBg,
+        bg_opacity: state.bgOpacity,
+        panel_opacity: state.panelOpacity
+    };
+    if (visualTimer) clearTimeout(visualTimer);
+    visualTimer = setTimeout(() => {
+        const v = pendingVisual;
+        api.saveBlur(v.panel, v.bg, v.bg_opacity, v.panel_opacity).catch(() => {});
+    }, 400);
+}
+
 let blurTimer = null;
 export function setBlur(panel, bg) {
     applyBlur(panel, bg);
     if (blurTimer) clearTimeout(blurTimer);
-    blurTimer = setTimeout(() => { api.saveBlur(panel, bg).catch(() => {}); }, 400);
+    blurTimer = setTimeout(() => {
+        api.saveBlur(panel, bg, state.bgOpacity, state.panelOpacity).catch(() => {});
+    }, 400);
+}
+
+export function setOpacity(bgOpacity, panelOpacity) {
+    applyOpacity(bgOpacity, panelOpacity);
+    saveVisualSoon();
 }
 
 export async function uploadBackgroundFile(file) {

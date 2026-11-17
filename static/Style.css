@@ -3468,3 +3468,41 @@ html[data-theme="dark"] #winui-sidebar .side-item {
 html:not([data-theme="dark"]) #winui-sidebar .side-item {
     --ButtonBackgroundPointerOver: rgba(0, 0, 0, 0.04);
 }
+/* ==================================================================
+   外观可调：背景不透明度 / 容器不透明度
+   ================================================================== */
+
+/* 背景图不透明度（0~1） */
+body.has-bg::before {
+    opacity: var(--bg-opacity, 1);
+}
+
+/* 容器不透明度：用 color-mix 按比例淡化卡片底色 */
+.vue-main .file-list-container,
+.modal-mask .modal-card,
+.upload-toast,
+.side-storage,
+.vue-main .file-header {
+    background: color-mix(in srgb,
+        var(--card-bg) calc(var(--panel-alpha, 1) * 100%),
+        transparent);
+}
+
+body.has-bg .file-list-container,
+body.has-bg .modal-card {
+    background: color-mix(in srgb,
+        rgba(18, 20, 26, 0.78) calc(var(--panel-alpha, 1) * 100%),
+        transparent);
+}
+
+html:not([data-theme="dark"]) body.has-bg .file-list-container,
+html:not([data-theme="dark"]) body.has-bg .modal-card {
+    background: color-mix(in srgb,
+        rgba(255, 255, 255, 0.84) calc(var(--panel-alpha, 1) * 100%),
+        transparent);
+}
+
+/* 后台弹窗里的滑块排布 */
+.bg-card .bg-slider-row {
+    margin-top: 14px;
+}

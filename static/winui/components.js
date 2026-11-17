@@ -8,7 +8,7 @@ import {
     toggleSelect, selectAll, clearSelection, deleteSelected, deleteOne,
     renameAction, createFolderAction, copySelection, pasteSelection,
     toggleHidden, restoreOne, purgeOne, emptyTrashAll, shareOne,
-    openShares, formatSize, formatTime, toast
+    openShares, formatSize, formatTime, toast, setBlur, setOpacity
 } from './store.js';
 import { uploads, addFiles, cancelTask, cancelAll, clearFinished } from './upload.js';
 
@@ -480,6 +480,24 @@ export const ShareModal = {
     }
 };
 
+function sliderRow(label, value, unit, min, max, onInput) {
+    const safe = typeof value === 'number' ? value : 0;
+    return h('div', { class: 'bg-slider-row' }, [
+        h('label', {}, [
+            label,
+            h('span', { class: 'val' }, safe + unit)
+        ]),
+        h('input', {
+            type: 'range',
+            min: min,
+            max: max,
+            step: 1,
+            value: safe,
+            onInput: (e) => onInput(Number(e.target.value))
+        })
+    ]);
+}
+
 export const BackgroundModal = {
     setup() {
         return () => state.showBackground
@@ -506,7 +524,23 @@ export const BackgroundModal = {
                                 MinHeight: 32,
                                 onClick: () => import('./store.js').then(m => m.clearBackgroundAction())
                             })
-                        ])
+                        ]),
+
+                        // 背景不透明度
+                        sliderRow('背景不透明度', state.bgOpacity, '%', 0, 100,
+                            (v) => setOpacity(v, state.panelOpacity)),
+
+                        // 背景模糊
+                        sliderRow('背景模糊', state.blurBg, 'px', 0, 30,
+                            (v) => setBlur(state.blurPanel, v)),
+
+                        // 主界面容器不透明度
+                        sliderRow('主界面容器不透明度', state.panelOpacity, '%', 0, 100,
+                            (v) => setOpacity(state.bgOpacity, v)),
+
+                        // 文件区域模糊
+                        sliderRow('文件区域模糊', state.blurPanel, 'px', 0, 40,
+                            (v) => setBlur(v, state.blurBg))
                     ])
                 ])
             ])

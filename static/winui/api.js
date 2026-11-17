@@ -113,8 +113,13 @@ export function clearBackground() {
     return postJSON('/prefs/background/clear', {});
 }
 
-export function saveBlur(panel, bg) {
-    return postJSON('/prefs/blur', { panel: panel, bg: bg });
+export function saveBlur(panel, bg, bgOpacity, panelOpacity) {
+    return postJSON('/prefs/blur', {
+        panel: panel,
+        bg: bg,
+        bg_opacity: typeof bgOpacity === 'number' ? bgOpacity : 100,
+        panel_opacity: typeof panelOpacity === 'number' ? panelOpacity : 100
+    });
 }
 
 export function setPassword(oldPw, newPw) {

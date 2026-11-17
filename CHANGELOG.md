@@ -599,3 +599,27 @@
 - 卡片之间补了 12px 间距（`body.embed .card + .card { margin-top: 12px }`）
 
 实测：`.admin-view` 1166×782、`background rgb(32,32,32)`、`border-radius 8px`、`overflow hidden`
+## beta 2026.1117.22 — 外观新增「背景不透明度」「主界面容器不透明度」
+
+背景设置弹窗现在有四个滑块：
+
+| 选项 | 范围 | 作用 |
+|---|---|---|
+| 背景不透明度 | 0–100% | 背景图的整体透明度（`body.has-bg::before { opacity }`） |
+| 背景模糊 | 0–30px | 背景图的 `filter: blur()` |
+| 主界面容器不透明度 | 0–100% | 列表卡片 / 弹窗 / 表头的底色浓度（`color-mix` 按比例淡化 `--card-bg`） |
+| 文件区域模糊 | 0–40px | 卡片背后内容的毛玻璃强度 |
+
+**存储**：`users` 表新增 `bg_opacity`、`panel_opacity` 两列（启动时自动 `ALTER TABLE` 迁移，默认 100），`/prefs/blur` 与 `/auth/me` 同步扩展，登出再登录仍保留。
+
+**实现**：
+- CSS 变量 `--bg-opacity`、`--panel-alpha`，由 store 写入 `document.documentElement`
+- 卡片底色 `background: color-mix(in srgb, var(--card-bg) calc(var(--panel-alpha) * 100%), transparent)`，有背景图时同样处理深/浅两套底色
+- 拖动滑块即时生效，400ms 防抖后写库
+
+实测：
+```
+滑块 4 个：背景不透明度100% / 背景模糊0px / 主界面容器不透明度100% / 文件区域模糊24px
+保存后 /auth/me 返回 bg_opacity=60, panel_opacity=50, blur_bg=6
+--panel-alpha=0.5 时卡片背景 alpha 从 0.0512 降到 0.0256（oklab 计算值）
+```
