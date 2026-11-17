@@ -196,6 +196,34 @@ if (document.readyState === 'loading') {
     mount();
 }
 
+// ?diag=1：右下角显示诊断信息，便于排查「页面看起来没变化」
+if (new URLSearchParams(location.search).has('diag')) {
+    const box = document.createElement('pre');
+    box.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;max-width:46vw;'
+        + 'max-height:40vh;overflow:auto;margin:0;padding:8px 10px;border-radius:8px;'
+        + 'background:rgba(0,0,0,.82);color:#7CFC00;font:11px/1.5 Consolas,monospace;'
+        + 'white-space:pre-wrap;pointer-events:none';
+    document.body.appendChild(box);
+    setInterval(() => {
+        const fr = document.getElementById('admin-frame');
+        const rows = document.querySelectorAll('#winui-app .file-item').length;
+        box.textContent = [
+            'version   : ' + (state.version || '(未取到)'),
+            'view      : ' + state.view,
+            'role      : ' + (state.role || '-'),
+            'isAdmin   : ' + state.isAdmin,
+            'items     : ' + state.items.length + ' （可见 ' + visibleFiles.value.length + '，DOM 行 ' + rows + '）',
+            'loading   : ' + state.loading,
+            'error     : ' + (state.error || '-'),
+            'viewMode  : ' + state.viewMode,
+            'iframe    : ' + (fr ? '有 ' + fr.offsetWidth + 'x' + fr.offsetHeight : '无'),
+            'window    : ' + window.innerWidth + 'x' + window.innerHeight,
+            'sidebar   : ' + (document.getElementById('sidebar')
+                ? getComputedStyle(document.getElementById('sidebar')).display : '-')
+        ].join('\n');
+    }, 400);
+}
+
 // 侧边栏：桌面折叠 / 移动端抽屉
 window.toggleSidebar = function () {
     const narrow = window.innerWidth <= 900;
