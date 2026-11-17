@@ -694,3 +694,24 @@
 iframe .card 背景 color(srgb 1 1 1 / 0.0229)   ← 0.0512 × 0.45
 iframe .card 模糊 blur(8px) saturate(1.25)
 ```
+## beta 2026.1117.30 — 修复浅色主题下不透明度不生效
+
+**根因**：`color-mix()` 里的百分比位置我写成了 `calc(var(--panel-alpha, 1) * 100%)`。这个写法在 Edge 里会让整条 `background` 声明失效，浏览器回退到更早的规则（固定值），所以滑块怎么拖都没反应；深色主题看起来"能动"其实是回退后碰巧是深色值。
+
+**修法**：让变量直接就是百分比字符串，color-mix 里不再套 calc——
+
+```css
+background: color-mix(in srgb, var(--card-bg) var(--panel-alpha, 100%), transparent);
+```
+
+JS 端写变量时改成 `--panel-alpha: 40%`（原来是 `0.4`）。`--bg-opacity` 仍保持 0~1 数值（用于 `opacity`）。
+
+实测（同一元素，切换主题 + 改变量）：
+
+| 场景 | 容器 alpha |
+|---|---|
+| 深色 100% | 0.0510 |
+| 深色 40% | 0.0205 |
+| 浅色 100% | 0.6740 |
+| 浅色 40% | 0.2852 |
+| 浅色 模糊 6px | blur(6px) saturate(1.25) |

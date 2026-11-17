@@ -3356,7 +3356,7 @@ body.sidebar-collapsed .app-shell {
     flex-direction: column;
     /* 与主界面文件容器一致：跟随容器不透明度与模糊度 */
     background: color-mix(in srgb,
-        var(--card-bg) calc(var(--panel-alpha, 1) * 100%),
+        var(--card-bg) var(--panel-alpha, 100%),
         transparent);
     backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
     -webkit-backdrop-filter: blur(var(--panel-blur, 24px)) saturate(1.25);
@@ -3488,7 +3488,7 @@ body.has-bg::before {
 .upload-toast,
 .vue-main .file-header {
     background: color-mix(in srgb,
-        var(--card-bg) calc(var(--panel-alpha, 1) * 100%),
+        var(--card-bg) var(--panel-alpha, 100%),
         transparent);
 }
 
@@ -3500,14 +3500,14 @@ body.has-bg::before {
 body.has-bg .file-list-container,
 body.has-bg .modal-card {
     background: color-mix(in srgb,
-        rgba(18, 20, 26, 0.78) calc(var(--panel-alpha, 1) * 100%),
+        rgba(18, 20, 26, 0.78) var(--panel-alpha, 100%),
         transparent);
 }
 
 html:not([data-theme="dark"]) body.has-bg .file-list-container,
 html:not([data-theme="dark"]) body.has-bg .modal-card {
     background: color-mix(in srgb,
-        rgba(255, 255, 255, 0.84) calc(var(--panel-alpha, 1) * 100%),
+        rgba(255, 255, 255, 0.84) var(--panel-alpha, 100%),
         transparent);
 }
 

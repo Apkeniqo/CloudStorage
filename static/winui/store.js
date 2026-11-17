@@ -404,7 +404,7 @@ export function syncFrameVars() {
     if (!doc || !doc.documentElement) return;
     const root = doc.documentElement;
     root.style.setProperty('--bg-opacity', String(state.bgOpacity / 100));
-    root.style.setProperty('--panel-alpha', String(state.panelOpacity / 100));
+    root.style.setProperty('--panel-alpha', state.panelOpacity + '%');
     root.style.setProperty('--panel-blur', state.blurPanel + 'px');
     root.style.setProperty('--bg-blur', state.blurBg + 'px');
 }
@@ -413,7 +413,7 @@ export function applyOpacity(bgOpacity, panelOpacity) {
     state.bgOpacity = bgOpacity;
     state.panelOpacity = panelOpacity;
     document.documentElement.style.setProperty('--bg-opacity', String(bgOpacity / 100));
-    document.documentElement.style.setProperty('--panel-alpha', String(panelOpacity / 100));
+    document.documentElement.style.setProperty('--panel-alpha', panelOpacity + '%');
     syncFrameVars();
 }
 
