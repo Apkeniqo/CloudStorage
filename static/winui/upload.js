@@ -128,7 +128,9 @@ export async function computeFileHash(file) {
 // ---------------------------------------------------------------- 任务
 
 function newTask(file) {
-    return {
+    // 必须用 reactive 包起来：任务对象会被 tick()/finish() 直接改字段，
+    // 如果只是普通对象，Vue 追踪不到，面板上的速度和进度就不会自己刷新
+    return reactive({
         id: 'up-' + (++seq),
         file: file,
         name: file.name,
@@ -143,7 +145,7 @@ function newTask(file) {
         startedAt: 0,
         lastTick: 0,
         lastLoaded: 0
-    };
+    });
 }
 
 function tick(task) {

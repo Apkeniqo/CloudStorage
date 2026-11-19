@@ -984,3 +984,33 @@ app-shell max-width: none
 ```
 
 > 注意：`--card-bg` 是全站共用的（文件容器、吸顶表头、弹窗、后台卡片），所以深色下这些地方都会一起变实。
+## beta 2026.1117.46 — 修复上传速度和进度不实时刷新
+
+**原因**：`newTask()` 返回的是**普通对象**：
+
+```js
+const task = newTask(file);
+uploads.tasks.push(task);   // 数组是 reactive 的，但 task 是原始引用
+tick(task);                 // 后续都直接改这个原始对象
+```
+
+Vue 的 `reactive` 只在**通过代理访问**时追踪。`uploads` 是 `reactive({ tasks: [...] })`，但 `task` 这个外部引用指向原始对象，`tick()` / `finish()` 改它不会触发任何依赖——所以面板上的速度、百分比、分片文案全都停着不动。
+
+之前点「收起」能刷新，是因为收起/展开让 `v-if` 重建了 DOM，读了一次最新值。
+
+**修法**：让任务对象本身就是响应式的。
+
+```js
+function newTask(file) {
+    return reactive({ id: 'up-' + (++seq), ... });
+}
+```
+
+**实测**（塞一个假任务后直接改字段）：
+
+```
+改前  MYI_3527.MP4  0%
+改后  MYI_3527.MP4  42%   643 KB/s · 分块传输中（64/128 片）
+```
+
+不带任何点击，面板自己就刷新了。
