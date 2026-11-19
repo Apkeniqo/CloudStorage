@@ -163,7 +163,8 @@ function tick(task) {
     const dt = (now - task.lastTick) / 1000;
     if (dt >= 0.4) {
         const delta = task.loaded - task.lastLoaded;
-        task.speed = delta / dt;
+        // loaded 会因为「暂停后重传」而回退，delta 为负时直接按 0 处理，避免显示负速度
+        task.speed = delta > 0 ? delta / dt : 0;
         task.lastTick = now;
         task.lastLoaded = task.loaded;
     }
@@ -211,6 +212,7 @@ export function resumeTask(id) {
     task.paused = false;
     task.message = '继续上传…';
     task.lastTick = 0;
+    task.lastLoaded = task.loaded;
 }
 
 export function cancelTask(id) {
@@ -292,6 +294,7 @@ function uploadSingle(task, targetPath) {
             task.status = 'uploading';
             task.message = '上传中…';
             task.lastTick = performance.now();
+            task.lastLoaded = task.loaded;
 
             const fd = new FormData();
             fd.append('file', task.file);
