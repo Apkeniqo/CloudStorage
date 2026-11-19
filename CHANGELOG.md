@@ -1100,3 +1100,51 @@ onClick: (e) => {
 ```
 
 中止行为已确认；恢复后重发依赖 `onabort → attempt()` 的回路。
+## beta 2026.1117.51 — 修复上传速度偶发负数
+
+**原因**：`tick()` 里速度是「这一拍的 loaded 减去上一拍的 loaded」：
+
+```js
+const delta = task.loaded - task.lastLoaded;
+task.speed = delta / dt;
+```
+
+只要 `loaded` 回退一次，delta 就是负的。两个来源：
+
+1. **直传暂停后重传**（1117.50 新增）：恢复时 `loaded` 被重置为 0，而 `lastLoaded` 还停在暂停前的值 → 负数
+2. **分片并发**：`task.loaded = baseLoaded + extra`，某片完成时 `baseLoaded` 跳增，但另一片的 progress 回调可能滞后、带着旧的 `extra` → 瞬时算出来的 `loaded` 反而更小 → 负数
+
+**修法**：
+
+```js
+task.speed = delta > 0 ? delta / dt : 0;   // 进度回退时按 0 处理
+```
+
+另外两处同步基准，避免下一次采样再算出负数：
+
+- `uploadSingle` 重新开始（暂停后重传）时：`task.lastLoaded = task.loaded`
+- `resumeTask()` 恢复时：`task.lastLoaded = task.loaded`
+
+速度公式本身没变（还是滑动平均），只是把「回退」这种非法输入钳到 0。
+## beta 2026.1117.52 — 上传中速度闪负数的真正原因
+
+上一版只做了「负数钳到 0」，但没解决 `loaded` 为什么会回退。实际场景是**上传过程中**（不是暂停恢复）：
+
+分片上传有 4 个并发，`loaded` 是这样算的：
+
+```js
+const extra = Math.round(chunk.size * (e.loaded / e.total));
+task.loaded = Math.min(task.size, baseLoaded + extra);
+```
+
+某一片完成时 `baseLoaded` 立即跳增，但**另一片的 progress 回调可能滞后一拍**、还带着旧值——于是两次采样之间算出来的 `loaded` 反而更小，`delta` 为负，速度就闪一下负数，下一拍又正常。
+
+**修法**：让 `loaded` 单调不减。
+
+```js
+task.loaded = Math.max(task.loaded, Math.min(task.size, baseLoaded + extra));
+```
+
+三处都改了：分片进度回调、分片完成回调、直传进度回调。配合上一版的 `delta > 0 ? ... : 0`，速度不可能再出现负值。
+
+> 副作用：极端情况下进度会「只进不退」，也就是某一片重传时进度条不会回退——这正是想要的观感。
