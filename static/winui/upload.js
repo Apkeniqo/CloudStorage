@@ -302,7 +302,7 @@ function uploadSingle(task, targetPath) {
 
             xhr.upload.onprogress = (e) => {
                 if (!e.lengthComputable) return;
-                task.loaded = e.loaded;
+                task.loaded = Math.max(task.loaded, e.loaded);
                 tick(task);
                 task.message = '上传中 ' + task.percent + '%';
             };
@@ -465,7 +465,10 @@ async function uploadChunked(task, targetPath) {
             xhr.upload.onprogress = (e) => {
                 if (!e.lengthComputable) return;
                 const extra = Math.round(chunk.size * (e.loaded / e.total));
-                task.loaded = Math.min(task.size, baseLoaded + extra);
+                // 4 片并发时，某片完成会让 baseLoaded 跳增，而另一片的 progress
+                // 回调可能还带着旧值，算出来的 loaded 会瞬时变小 -> 速度闪一下负数。
+                // 用 max 保证 loaded 单调不减
+                task.loaded = Math.max(task.loaded, Math.min(task.size, baseLoaded + extra));
                 tick(task);
             };
 
@@ -473,7 +476,7 @@ async function uploadChunked(task, targetPath) {
                 task.xhrs.delete(xhr);
                 if (xhr.status === 200) {
                     baseLoaded += chunk.size;
-                    task.loaded = Math.min(task.size, baseLoaded);
+                    task.loaded = Math.max(task.loaded, Math.min(task.size, baseLoaded));
                     tick(task);
                     resolve();
                     return;
