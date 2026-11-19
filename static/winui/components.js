@@ -202,7 +202,12 @@ function iconBtn(props, icon, onClick, enabled) {
         ...props,
         IsEnabled: true,
         class: 'winui-icon-btn ' + (on ? '' : 'winui-disabled ') + (props.class || ''),
-        onClick: (e) => { e.stopPropagation(); if (on) onClick(e); }
+        onClick: (e) => {
+            // winuionweb 的 Button 可能不带事件参数回调，这里必须防御性判断，
+            // 否则 e 为 undefined 时 e.stopPropagation() 抛错，整个回调都不会执行
+            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (on) onClick(e);
+        }
     }, () => h(WinIcon, { name: icon, size: 18 }));
 }
 

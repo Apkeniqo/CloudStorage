@@ -1028,3 +1028,31 @@ function newTask(file) {
 改前  点击 file-size 区域    无反应
 改后  点击 file-size 区域    面包屑 主页 / → 主页 / 图片 /   行数 3 → 0
 ```
+## beta 2026.1117.48 — 修复工具栏/操作按钮全部失灵（含主题切换）
+
+**是我上一个版本引入的**：1117.47 为了「整行可点」在 `iconBtn` 里加了 `e.stopPropagation()`：
+
+```js
+onClick: (e) => { e.stopPropagation(); if (on) onClick(e); }
+```
+
+但 winuionweb 的 `Button` 调用 `onClick` 时**不传事件对象**，`e` 是 `undefined` → `e.stopPropagation()` 直接抛 TypeError → 整个回调根本没执行。
+
+受影响的是**所有 `iconBtn`**：新建文件夹、视图切换、复制/剪切/粘贴、主题切换、清空回收站，以及每行的下载/分享/改名/隐藏/删除——只是主题切换最容易被发现。
+
+**修法**：防御性判断。
+
+```js
+onClick: (e) => {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (on) onClick(e);
+}
+```
+
+**实测**（点主题按钮两下）：
+
+```
+初始   dark   body rgb(32,32,32)
+点1     light  body rgb(243,243,243)   ls=light
+点2     dark   body rgb(32,32,32)      ls=dark
+```
