@@ -2922,6 +2922,37 @@ html.theme-switching *::after {
     border-bottom: 1px solid var(--divider-stroke);
 }
 
+.upload-ops {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 4px;
+    flex: none;
+}
+
+.upload-ops .up-btn {
+    padding: 2px 8px;
+    font-size: 11.5px;
+    line-height: 18px;
+    border-radius: var(--ControlCornerRadius);
+    border: 1px solid var(--ctrl-border);
+    background: var(--ctrl-fill-default);
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.upload-ops .up-btn:hover {
+    background: var(--ctrl-fill-secondary);
+}
+
+.upload-ops .up-btn.up-cancel {
+    color: var(--critical-text, #d13438);
+}
+
+.upload-bar i.is-paused {
+    background: var(--text-tertiary);
+}
+
 .upload-close {
     min-width: 28px !important;
     min-height: 28px !important;

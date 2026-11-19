@@ -139,6 +139,7 @@ function newTask(file) {
         percent: 0,
         speed: 0,
         status: 'waiting',       // waiting | hashing | uploading | merging | done | error | cancelled
+        paused: false,
         message: '准备上传…',
         cancelled: false,
         xhrs: new Set(),
@@ -171,6 +172,36 @@ function finish(task, status, message) {
     task.percent = status === 'done' ? 100 : task.percent;
     task.speed = 0;
     refreshStorage();
+}
+
+// 暂停期间不发新分片，已经在传的那几片会传完
+function waitWhilePaused(task) {
+    if (!task.paused || task.cancelled) return Promise.resolve();
+    return new Promise(resolve => {
+        const timer = setInterval(() => {
+            if (!task.paused || task.cancelled) {
+                clearInterval(timer);
+                resolve();
+            }
+        }, 200);
+    });
+}
+
+export function pauseTask(id) {
+    const task = uploads.tasks.find(t => t.id === id);
+    if (!task) return;
+    if (task.status === 'done' || task.status === 'cancelled' || task.status === 'error') return;
+    task.paused = true;
+    task.speed = 0;
+    task.message = '已暂停';
+}
+
+export function resumeTask(id) {
+    const task = uploads.tasks.find(t => t.id === id);
+    if (!task || !task.paused) return;
+    task.paused = false;
+    task.message = '继续上传…';
+    task.lastTick = 0;
 }
 
 export function cancelTask(id) {
@@ -389,6 +420,7 @@ async function uploadChunked(task, targetPath) {
         const maxRetry = 4;
 
         const attempt = async () => {
+            await waitWhilePaused(task);
             if (task.cancelled) return reject(new Error('cancelled'));
             let crc = null;
             try { crc = await chunkCrc32(chunk); } catch (e) { crc = null; }
