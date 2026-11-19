@@ -150,6 +150,10 @@ function newTask(file) {
 }
 
 function tick(task) {
+    if (task.paused) {
+        task.speed = 0;
+        return;
+    }
     const now = performance.now();
     if (!task.lastTick) {
         task.lastTick = now;
@@ -194,6 +198,11 @@ export function pauseTask(id) {
     task.paused = true;
     task.speed = 0;
     task.message = '已暂停';
+    // 立刻中止在途分片，否则那几个几十 MB 的分片会继续传完，看起来像没暂停
+    task.xhrs.forEach(xhr => {
+        try { xhr.abort(); } catch (e) { /* 已结束 */ }
+    });
+    task.xhrs.clear();
 }
 
 export function resumeTask(id) {
@@ -276,53 +285,68 @@ async function runTask(task, targetPath) {
 
 function uploadSingle(task, targetPath) {
     return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        task.xhrs.add(xhr);
-        task.status = 'uploading';
-        task.message = '上传中…';
-        task.lastTick = performance.now();
+        // 直传没有断点，暂停后只能从头重传；用 start() 包一层便于重入
+        const start = () => {
+            const xhr = new XMLHttpRequest();
+            task.xhrs.add(xhr);
+            task.status = 'uploading';
+            task.message = '上传中…';
+            task.lastTick = performance.now();
 
-        const fd = new FormData();
-        fd.append('file', task.file);
-        fd.append('path', targetPath || '');
+            const fd = new FormData();
+            fd.append('file', task.file);
+            fd.append('path', targetPath || '');
 
-        xhr.upload.onprogress = (e) => {
-            if (!e.lengthComputable) return;
-            task.loaded = e.loaded;
-            tick(task);
-            task.message = '上传中 ' + task.percent + '%';
-        };
+            xhr.upload.onprogress = (e) => {
+                if (!e.lengthComputable) return;
+                task.loaded = e.loaded;
+                tick(task);
+                task.message = '上传中 ' + task.percent + '%';
+            };
 
-        xhr.onload = () => {
-            task.xhrs.delete(xhr);
-            if (xhr.status === 200) {
-                finish(task, 'done', '已完成');
+            xhr.onload = () => {
+                task.xhrs.delete(xhr);
+                if (xhr.status === 200) {
+                    finish(task, 'done', '已完成');
+                    resolve();
+                    return;
+                }
+                let msg = '上传失败（' + xhr.status + '）';
+                try {
+                    const info = JSON.parse(xhr.responseText || '{}');
+                    if (info && info.message) msg = info.message;
+                } catch (e) { /* 非 JSON */ }
+                finish(task, 'error', msg);
+                reject(new Error(msg));
+            };
+
+            xhr.onerror = () => {
+                task.xhrs.delete(xhr);
+                finish(task, 'error', '网络错误');
+                reject(new Error('网络错误'));
+            };
+
+            xhr.onabort = () => {
+                task.xhrs.delete(xhr);
+                if (task.paused && !task.cancelled) {
+                    // 暂停引起的中止：不算取消，等恢复后从头重传
+                    task.loaded = 0;
+                    task.percent = 0;
+                    task.message = '已暂停';
+                    waitWhilePaused(task).then(() => {
+                        if (!task.cancelled) start();
+                    });
+                    return;
+                }
+                finish(task, 'cancelled', '已取消');
                 resolve();
-                return;
-            }
-            let msg = '上传失败（' + xhr.status + '）';
-            try {
-                const info = JSON.parse(xhr.responseText || '{}');
-                if (info && info.message) msg = info.message;
-            } catch (e) { /* 非 JSON */ }
-            finish(task, 'error', msg);
-            reject(new Error(msg));
+            };
+
+            xhr.open('POST', '/upload', true);
+            xhr.send(fd);
         };
 
-        xhr.onerror = () => {
-            task.xhrs.delete(xhr);
-            finish(task, 'error', '网络错误');
-            reject(new Error('网络错误'));
-        };
-
-        xhr.onabort = () => {
-            task.xhrs.delete(xhr);
-            finish(task, 'cancelled', '已取消');
-            resolve();
-        };
-
-        xhr.open('POST', '/upload', true);
-        xhr.send(fd);
+        start();
     });
 }
 
@@ -475,6 +499,11 @@ async function uploadChunked(task, targetPath) {
 
             xhr.onabort = () => {
                 task.xhrs.delete(xhr);
+                if (task.paused && !task.cancelled) {
+                    // 暂停引起的中止：不要算失败，回到 attempt() 等暂停解除后重发这一片
+                    attempt();
+                    return;
+                }
                 reject(new Error('cancelled'));
             };
 

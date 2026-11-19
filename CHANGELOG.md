@@ -1078,3 +1078,25 @@ onClick: (e) => {
 点继续 → paused=false，按钮回到 [暂停]
 点取消 → status=cancelled，消息「已取消」，按钮消失
 ```
+## beta 2026.1117.50 — 暂停真正生效（中止在途分片）
+
+**上一版只是「不再发新分片」**：已经在传的那 4 个分片会继续传完。分片大小 8～64 MB，4 片就是 32～256 MB，所以点了暂停进度条还在往前爬，看起来完全没停。
+
+**这一版**：
+
+- `pauseTask()` 里对所有在途 XHR 调 `abort()`，网络立刻停
+- 分片上传的 `onabort` 区分两种情况：
+  - 暂停导致 → 不算失败，回到 `attempt()` 等暂停解除后**重发这一片**
+  - 取消导致 → 照旧抛 `cancelled`
+- `tick()` 在 `paused` 时直接返回，不再刷新速度（暂停瞬间速度归零，不会继续跳）
+- 直传（<200 MB）也支持暂停：`uploadSingle` 拆出可重入的 `start()`，暂停时 abort、恢复后从头重传（直传没有断点）
+
+**实测**（塞一个含假 XHR 的任务，点暂停）：
+
+```
+暂停前  xhrs=1
+点暂停  aborted=1  xhrsLeft=0  paused=true  speed=0  message=已暂停
+点继续  paused=false  message=继续上传…
+```
+
+中止行为已确认；恢复后重发依赖 `onabort → attempt()` 的回路。
