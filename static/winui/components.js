@@ -202,7 +202,7 @@ function iconBtn(props, icon, onClick, enabled) {
         ...props,
         IsEnabled: true,
         class: 'winui-icon-btn ' + (on ? '' : 'winui-disabled ') + (props.class || ''),
-        onClick: (e) => { if (on) onClick(e); }
+        onClick: (e) => { e.stopPropagation(); if (on) onClick(e); }
     }, () => h(WinIcon, { name: icon, size: 18 }));
 }
 
@@ -370,7 +370,11 @@ export const FileList = {
                             + (f.is_dir ? ' is-dir' : '')
                             + (state.selected.includes(path) ? ' selected' : '')
                             + (f.hidden ? ' is-hidden' : '')
-                            + (cut ? ' cutting' : '')
+                            + (cut ? ' cutting' : ''),
+                        // 整行可点：文件夹点哪都能进去（回收站除外）
+                        onClick: () => {
+                            if (f.is_dir && state.view !== 'trash') navigateTo(path);
+                        }
                     }, [
                         h('div', { class: 'col-check' }, [
                             h('input', {
@@ -386,6 +390,7 @@ export const FileList = {
                                  onClick: (e) => {
                                      if (f.is_dir && state.view !== 'trash') {
                                          e.preventDefault();
+                                         e.stopPropagation();
                                          navigateTo(path);
                                      }
                                  }
