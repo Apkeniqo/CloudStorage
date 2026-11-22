@@ -248,14 +248,6 @@ def rename_file(old_name, new_name):
     )
 
 
-def files_by_user(user_id, limit=200):
-    return _all(
-        "SELECT * FROM files WHERE uploader_id = ? AND deleted_at IS NULL"
-        " ORDER BY id DESC LIMIT ?",
-        (user_id, limit),
-    )
-
-
 def stats():
     row = _one(
         "SELECT COUNT(*) AS files, COALESCE(SUM(size), 0) AS bytes FROM files"

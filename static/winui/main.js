@@ -1,15 +1,15 @@
 // 应用入口：组装根组件、上传、拖拽、实时刷新
 
-import { createApp, h, watch, onMounted, nextTick, Teleport } from 'vue';
+import { createApp, h, watch, nextTick, Teleport } from 'vue';
 import WinUIOnWeb from 'winuionweb';
 import {
-    state, init, reload, visibleFiles, formatTime, syncFrameVars,
+    state, init, reload, visibleFiles, syncFrameVars,
     uploadBackgroundFile, toast
 } from './store.js';
 import { addFiles } from './upload.js';
 import {
     Sidebar, Toolbar, Breadcrumb, FileList, SelectionBar,
-    UploadPanel, ShareModal, BackgroundModal, ToastBar, WinIcon
+    UploadPanel, ShareModal, BackgroundModal, ToastBar
 } from './components.js';
 
 const App = {
@@ -32,20 +32,6 @@ const App = {
                 });
             }
         }, { immediate: true });
-
-        watch(() => state.showBackground, (open) => {
-            if (open) nextTick(() => {
-                // 背景弹窗里的滑杆：值同步到 CSS 变量
-                syncBlur();
-            });
-        });
-
-        function syncBlur() {
-            const panel = document.getElementById('blur-panel');
-            const bg = document.getElementById('blur-bg');
-            if (panel) panel.value = state.blurPanel;
-            if (bg) bg.value = state.blurBg;
-        }
 
         return () => h('div', { class: 'vue-main' }, [
             h('div', { class: 'title-row' }, [h(Breadcrumb)]),

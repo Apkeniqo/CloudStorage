@@ -121,7 +121,3 @@ export function saveBlur(panel, bg, bgOpacity, panelOpacity) {
         panel_opacity: typeof panelOpacity === 'number' ? panelOpacity : 100
     });
 }
-
-export function setPassword(oldPw, newPw) {
-    return postJSON('/admin/password', { old: oldPw, new: newPw });
-}

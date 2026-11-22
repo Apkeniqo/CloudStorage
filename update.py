@@ -66,11 +66,6 @@ def local_version():
     return version.VERSION
 
 
-def parse_version(text):
-    import version
-    return version.parse(text)
-
-
 def is_newer(remote, local):
     import version
     return version.is_newer(remote, local)
@@ -143,13 +138,6 @@ class Api:
         raise SystemExit(
             '连接 api.github.com 失败：%s\n'
             '请确认网络或代理能访问 api.github.com（github.com 被拦截不影响这里）。' % last)
-        if raw:
-            return data
-        return json.loads(data.decode('utf-8'))
-
-    def text(self, path):
-        return self.get(path, raw=True).decode('utf-8')
-
 
 def proxy_raw_url(proxy, repo, branch, path):
     """代理上的 raw 地址：<proxy>/https://raw.githubusercontent.com/<repo>/<branch>/<path>"""
@@ -342,27 +330,6 @@ def write_file(path, content):
     with open(tmp, 'wb') as f:
         f.write(content)
     os.replace(tmp, full)
-
-
-def _normalize(data):
-    """换行差异不算变化：仓库里存 LF，Windows 工作区常是 CRLF"""
-    return data.replace(b'\r\n', b'\n')
-
-
-def changed_files(files):
-    """只保留内容与本地不同的文件"""
-    diff = []
-    for path, content in files:
-        full = os.path.join(BASE_DIR, path.replace('/', os.sep))
-        if os.path.isfile(full):
-            try:
-                with open(full, 'rb') as f:
-                    if _normalize(f.read()) == _normalize(content):
-                        continue
-            except OSError:
-                pass
-        diff.append((path, content))
-    return diff
 
 
 SERVICE_NAME = 'CloudStorage'

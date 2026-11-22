@@ -15,7 +15,6 @@ export const state = reactive({
     role: '',
     isAdmin: false,
     isGuest: false,
-    ready: false,
 
     // 导航
     view: 'files',              // home | files | trash | admin
@@ -241,10 +240,6 @@ export function setSort(by) {
         state.sortBy = key + '-asc';
     }
     localStorage.setItem(LS.sort, state.sortBy);
-}
-
-export function isSelected(path) {
-    return state.selected.includes(path);
 }
 
 export function toggleSelect(path) {
@@ -487,7 +482,6 @@ export async function init() {
 
     refreshStorage();
     await loadFiles('');
-    state.ready = true;
 }
 
 export async function refreshStorage() {

@@ -1,16 +1,16 @@
 // 组件：图标、侧边栏、工具栏、面包屑、文件列表、选择条、上传面板
 
 import { computed, h, ref, watch, onMounted, nextTick } from 'vue';
-import { Button, TextBlock, TextBox, CheckBox, ProgressBar } from 'winuionweb';
+import { Button, TextBox } from 'winuionweb';
 import {
     state, visibleFiles, selectedCount, allSelected,
-    navTo, navigateTo, setViewMode, toggleViewMode, setSort, setSearch,
+    navTo, navigateTo, toggleViewMode, setSort, setSearch,
     toggleSelect, selectAll, clearSelection, deleteSelected, deleteOne,
     renameAction, createFolderAction, copySelection, pasteSelection,
     toggleHidden, restoreOne, purgeOne, emptyTrashAll, shareOne,
-    openShares, formatSize, formatTime, toast, setBlur, setOpacity
+    formatSize, formatTime, toast, setBlur, setOpacity
 } from './store.js';
-import { uploads, addFiles, cancelTask, cancelAll, clearFinished, pauseTask, resumeTask } from './upload.js';
+import { uploads, cancelTask, clearFinished, pauseTask, resumeTask } from './upload.js';
 
 const PATHS = {
     cloud: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4 0-2.05 1.53-3.76 3.56-3.97l1.07-.11.5-.95C8.08 7.14 9.94 6 12 6c2.62 0 4.88 1.86 5.39 4.43l.3 1.5 1.53.11c1.56.1 2.78 1.41 2.78 2.96 0 1.65-1.35 3-3 3z',
@@ -28,8 +28,6 @@ const PATHS = {
     paste: 'M19 2h-4.18C14.4.84 13.3 0 12 0S9.6.84 9.18 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z',
     sun: 'M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z',
     moon: 'M12.3 2a10 10 0 0 0-1.9 20 10 10 0 0 0 9.8-7.7 1 1 0 0 0-1.2-1.2 8 8 0 1 1-6.7-11.1 1 1 0 0 0 0-2z',
-    upload: 'M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z',
-    search: 'M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z',
     download: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
     share: 'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',
     rename: 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z',
@@ -595,4 +593,3 @@ export const ToastBar = {
     }
 };
 
-export { WinIcon as Icon };

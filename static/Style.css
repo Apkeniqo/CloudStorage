@@ -284,16 +284,6 @@ body {
     gap: 8px;
 }
 
-/* 这些按钮的文字标签只在移动端二级菜单里显示 */
-.btn-label { display: none; }
-
-.mobile-more { display: none; }
-
-/* 桌面端没有二级菜单，这个按钮点了没反应，直接隐藏 */
-.toolbar .mobile-more {
-    display: none;
-}
-
 /* Fluent Search Box */
 /* WinUI TextBox：默认填充 + 细描边，聚焦时底边变强调色 */
 .search-box {
@@ -423,53 +413,6 @@ body {
     fill: #ffffff;
 }
 
-.select-control {
-    background: var(--hover-bg);
-    border: 1px solid var(--card-border);
-    color: var(--text-main);
-    padding: 6px 12px;
-    border-radius: var(--radius);
-    font-size: 13px;
-    outline: none;
-    cursor: pointer;
-}
-
-.select-control option {
-    background: var(--bg-color);
-    color: var(--text-main);
-}
-
-/* WinUI AccentButton：强调色实心 + 无投影 + 按下变暗 */
-.upload-btn-label {
-    min-height: var(--ControlHeight);
-    background: var(--accent-base);
-    color: var(--accent-text);
-    border: 1px solid transparent;
-    border-bottom-color: var(--accent-border-accent, rgba(0, 0, 0, 0.40));
-    padding: 0 12px;
-    border-radius: var(--ControlCornerRadius);
-    font-size: var(--ControlContentThemeFontSize);
-    font-weight: 600;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    box-shadow: none;
-    transition: background-color var(--duration-fast) var(--fast-out-slow-in),
-                color var(--duration-fast) var(--fast-out-slow-in);
-}
-
-.upload-btn-label:hover {
-    background: var(--accent-hover);
-    transform: none;
-}
-
-.upload-btn-label:active {
-    background: var(--accent-pressed);
-    color: var(--accent-text-secondary);
-}
-
 #file-input {
     display: none;
 }
@@ -499,31 +442,6 @@ body {
     color: var(--text-secondary);
     border-bottom: 1px solid var(--card-border);
     font-weight: 600;
-}
-
-/* 可点击的表头列标 */
-.view-list .file-header .sortable-col {
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    border-radius: var(--radius);
-    padding: 2px 4px;
-    margin-left: -4px;
-    width: fit-content;
-    transition: background-color 0.15s ease;
-}
-
-.view-list .file-header .sortable-col:hover {
-    background: var(--hover-bg);
-    color: var(--text-main);
-}
-
-/* 排序箭头指示器 */
-.sort-arrow {
-    font-size: 10px;
-    opacity: 0.8;
-    color: var(--accent-color);
 }
 
 .view-list .file-item {
@@ -661,15 +579,6 @@ body {
     color: var(--accent-color);
 }
 
-.file-action .download-btn {
-    color: var(--accent-color);
-}
-
-.file-action .delete-btn:hover {
-    background: rgba(209, 52, 56, 0.12);
-    color: #d13438;
-}
-
 /* 文件名超链接样式 */
 .file-name-link {
     color: var(--text-main);
@@ -724,156 +633,6 @@ body {
     pointer-events: none;
 }
 
-/* 顶部标题栏 */
-.toast-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--card-border, rgba(0,0,0,0.1));
-}
-
-.toast-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-main);
-}
-
-.toast-close-btn {
-    background: none;
-    border: none;
-    font-size: 14px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    transition: background 0.2s, color 0.2s;
-}
-
-.toast-close-btn:hover {
-    background: var(--hover-bg);
-    color: #f44336;
-}
-
-/* 多文件列表区域 */
-.upload-list-container {
-    overflow-y: auto;
-    max-height: 300px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding-right: 2px;
-}
-
-/* 单个文件卡片 */
-.upload-item-card {
-    background: var(--hover-bg);
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid var(--card-border);
-}
-
-.item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 6px;
-}
-
-.item-name {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 260px;
-}
-
-.item-cancel-btn {
-    background: none;
-    border: none;
-    font-size: 12px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0 4px;
-}
-
-.item-cancel-btn:hover {
-    color: #f44336;
-}
-
-/* 进度条轨道与滑块 */
-.toast-progress-bar {
-    width: 100%;
-    height: 6px;
-    background: var(--hover-bg);
-    border-radius: 3px;
-    overflow: hidden;
-    margin-bottom: 6px;
-}
-
-.toast-progress-inner {
-    height: 100%;
-    background: var(--accent-color, #0078d4);
-    width: 0%;
-    transition: width 0.2s ease;
-}
-
-/* 底部状态/速度/百分比文本 */
-.toast-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-
-.progress-bar {
-    width: 100%;
-    height: 4px;
-    background: var(--subtle-secondary);
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: none;
-    overflow: hidden;
-    margin-bottom: 8px;
-}
-
-.toast-progress-inner {
-    height: 100%;
-    background: var(--accent-color, #0078d4);
-    width: 0%;
-    transition: width 0.2s ease;
-}
-
-.toast-meta {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: var(--text-secondary, #666666);
-}
-
-.progress-bar {
-    width: 100%;
-    height: 4px;
-    background: var(--hover-bg);
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: none;
-    overflow: hidden;
-}
-
-.progress-inner {
-    height: 100%;
-    background: var(--accent-base);
-    width: 0%;
-    border-radius: 2px;
-    transition: width var(--duration-fast) var(--fast-out-slow-in);
-}
-
 .empty-state {
     text-align: center;
     padding: 60px 0;
@@ -885,14 +644,6 @@ body {
     grid-column: 1 / -1;
     width: 100%;
     padding: 80px 16px;
-}
-
-/* 顶栏：标题 + 居中搜索 + 右侧操作（仿 OneDrive） */
-.topbar-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-main);
-    white-space: nowrap;
 }
 
 .header .sidebar-toggle {
@@ -923,11 +674,6 @@ body {
 .side-search .search-box {
     width: 100%;
     max-width: none;
-}
-
-/* 移动端头部的搜索图标（桌面隐藏） */
-.search-icon-btn {
-    display: none;
 }
 
 .header .toolbar {
@@ -994,10 +740,6 @@ body {
         min-width: 0;
     }
 
-    .topbar-title {
-        display: none;
-    }
-
     .title-row {
         padding: 0 12px 6px;
         gap: 8px;
@@ -1012,14 +754,6 @@ body {
         flex: 1 1 auto;
         width: auto;
         max-width: none;
-    }
-
-    .mobile-more {
-        display: inline-flex;
-    }
-
-    .toolbar .mobile-more {
-        display: inline-flex;
     }
 
     /* 视图/主题/后台/回收站/退出 收进二级菜单 */
@@ -1055,25 +789,10 @@ body {
         padding: 0 12px;
     }
 
-    .toolbar-extra .btn-label {
-        display: inline;
-        font-size: 14px;
-        font-weight: 400;
-    }
-
     /* 触摸目标不小于 40px */
     .btn-icon {
         min-width: 40px;
         min-height: 40px;
-    }
-
-    .upload-btn-label {
-        min-height: 40px;
-        display: inline-flex;
-        align-items: center;
-        padding: 0 12px;
-        font-size: 13px;
-        white-space: nowrap;
     }
 
     .file-list-container {
@@ -1150,17 +869,6 @@ body {
     .view-grid .file-action {
         opacity: 1;
     }
-}
-/* 访客（只读）：隐藏上传入口 */
-.guest-mode #new-folder-btn,
-.guest-mode .upload-btn-label,
-.guest-mode #file-input {
-    display: none !important;
-}
-
-.guest-mode .file-list-container {
-    /* 没有上传按钮时，列表仍占满高度 */
-    min-height: 0;
 }
 /* ---------------- 拖拽上传提示层 ---------------- */
 .drop-overlay {
@@ -1271,7 +979,6 @@ body.app-body {
     white-space: nowrap;
 }
 
-
 .side-nav {
     position: relative;
     display: flex;
@@ -1352,18 +1059,8 @@ body.app-body {
     box-shadow: none;
 }
 
-.side-item.active span,
-.side-item.active .side-label {
-    color: var(--accent-base);
-}
-
 html:not([data-theme="dark"]) .side-item.active {
     background: var(--subtle-secondary);
-    color: var(--accent-base);
-}
-
-html:not([data-theme="dark"]) .side-item.active span,
-html:not([data-theme="dark"]) .side-item.active .side-label {
     color: var(--accent-base);
 }
 
@@ -1453,29 +1150,6 @@ body.trash-mode .trash-only {
     display: inline-flex;
 }
 
-body.trash-mode #new-folder-btn,
-body.trash-mode .upload-btn-label,
-body.trash-mode #file-input {
-    display: none !important;
-}
-
-/* 回收站里的行：名称不可点，操作按钮换成恢复/彻底删除 */
-.trash-row .file-name {
-    color: var(--text-main);
-}
-
-.trash-badge {
-    display: inline-block;
-    margin-left: 8px;
-    padding: 1px 6px;
-    font-size: 11px;
-    border-radius: 8px;
-    background: rgba(209, 52, 56, 0.15);
-    color: #d13438;
-}
-
-
-
 /* 面包屑 */
 .breadcrumb {
     display: flex;
@@ -1515,24 +1189,8 @@ body.trash-mode #file-input {
     padding: 0 2px;
 }
 
-/* 文件夹行 */
-.folder-icon {
-    color: #f2b01e;
-    margin-right: 8px;
-    flex-shrink: 0;
-}
-
 .file-name.folder {
     cursor: pointer;
-}
-
-.file-name.folder .folder-name {
-    color: var(--text-main);
-    text-decoration: none;
-}
-
-.file-name.folder:hover .folder-name {
-    color: var(--accent-color);
 }
 
 /* 共享链接弹窗 */
@@ -1907,41 +1565,6 @@ body.trash-mode #file-input {
     gap: 8px;
 }
 
-/* WinUI 按钮：默认次级按钮 / 危险按钮 */
-.sel-btn {
-    min-height: 30px;
-    padding: 0 12px;
-    font-size: 13px;
-    font-weight: 400;
-    color: var(--critical-text);
-    background: var(--critical-bg);
-    border: 1px solid transparent;
-    border-radius: var(--ControlCornerRadius);
-    cursor: pointer;
-    transition: background-color var(--duration-fast) var(--fast-out-slow-in);
-}
-
-.sel-btn.ghost {
-    background: var(--ctrl-fill-default);
-    color: var(--text-primary);
-    border: 1px solid var(--ctrl-border);
-    border-bottom-color: var(--ctrl-border-accent);
-}
-
-.sel-btn:hover {
-    filter: none;
-    background: var(--critical-hover);
-}
-
-.sel-btn.ghost:hover {
-    background: var(--ctrl-fill-secondary);
-}
-
-.sel-btn.accent {
-    background: var(--accent-base);
-    color: var(--accent-text);
-}
-
 /* 视图切换：对齐 WinUI EntranceThemeTransition（淡入 + 轻微上移） */
 @keyframes viewFade {
     from { opacity: 0; transform: translateY(12px); }
@@ -1957,27 +1580,6 @@ body.trash-mode #file-input {
     opacity: 0.35;
     cursor: default;
     pointer-events: none;
-}
-
-/* ---------------- 管理后台（同页） ---------------- */
-.admin-panel {
-    display: none;
-    flex: 1;
-    min-width: 0;
-    padding: 12px 16px 8px;
-}
-
-/* 旧版 App.js 的整页后台容器，已被组件化后台取代，保留规则但不影响布局 */
-.admin-panel {
-    display: none;
-}
-
-.admin-panel iframe {
-    flex: 1;
-    width: 100%;
-    border: 0;
-    border-radius: calc(var(--radius) * 1.2);
-    background: transparent;
 }
 
 /* ---------------- 个人背景 ---------------- */
@@ -2031,11 +1633,6 @@ body.has-bg .app-shell {
     display: flex;
     gap: 10px;
     margin-top: 16px;
-}
-
-.sel-btn.accent {
-    background: var(--accent-color);
-    color: #fff;
 }
 
 /* 模糊滑块 */
@@ -2217,17 +1814,6 @@ body.sidebar-open {
     padding: 8px 12px;
 }
 
-.view-list .file-header .sortable-col {
-    border-radius: var(--ControlCornerRadius);
-    padding: 3px 6px;
-    transition: background-color var(--duration-fast) var(--fast-out-slow-in);
-}
-
-.view-list .file-header .sortable-col:hover {
-    background: var(--subtle-secondary);
-    color: var(--text-primary);
-}
-
 /* ---------- ListView：行 ---------- */
 .view-list .file-item {
     min-height: 40px;
@@ -2284,13 +1870,6 @@ body.sidebar-open {
     background: var(--subtle-tertiary);
 }
 
-/* 删除类按钮悬停使用危险色 */
-.action-btn.delete-btn:hover,
-.action-btn.purge-btn:hover {
-    background: rgba(196, 43, 28, 0.10);
-    color: var(--critical-bg);
-}
-
 /* ---------- GridView：卡片 ---------- */
 .view-grid .file-item {
     background: var(--card-bg);
@@ -2313,20 +1892,6 @@ body.sidebar-open {
     border: 1px solid var(--flyout-border);
     border-radius: var(--OverlayCornerRadius);
     box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
-}
-
-.upload-item-card {
-    border-radius: var(--ControlCornerRadius);
-}
-
-.toast-progress-bar {
-    border-radius: 2px;
-    background: var(--subtle-secondary);
-}
-
-.toast-progress-inner {
-    background: var(--accent-base);
-    border-radius: 2px;
 }
 
 /* ---------- 品牌与侧栏细节 ---------- */
@@ -2522,14 +2087,6 @@ select {
 .modal-mask.show .modal-card {
     animation: winFlyoutIn var(--duration-fast) var(--ease-standard) both;
     transform-origin: center top;
-}
-
-/* 按下反馈比悬停更快（83ms） */
-.btn-icon:active,
-.action-btn:active,
-.sel-btn:active,
-.pager-btn:active {
-    transition-duration: var(--duration-faster);
 }
 
 /* 输入框聚焦底边（无法用伪元素的原生 input，用内阴影过渡近似） */
@@ -3392,27 +2949,6 @@ body.sidebar-collapsed .app-shell {
     animation: vueViewEnter var(--duration-normal) var(--ease-standard) both;
 }
 
-.admin-bar {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    height: 40px;
-}
-
-.admin-back {
-    min-height: 32px !important;
-    height: 32px !important;
-    padding: 0 14px !important;
-    font-size: 13px !important;
-}
-
-.admin-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
 .admin-frame {
     flex: 1 1 auto;
     width: 100%;
@@ -3438,28 +2974,6 @@ body.admin-mode .app-shell {
 .vue-main .status-version {
     color: var(--text-tertiary);
     opacity: 0.8;
-}
-/* ==================================================================
-   按钮交互态：加强 hover / pressed 对比，去掉底部深色边框
-   ================================================================== */
-#winui-toolbar .winui-icon-btn,
-#winui-toolbar .winui-upload-btn,
-#winui-app .action-btn,
-#winui-app .sel-btn,
-.modal-mask .win-btn,
-.vue-main .selection-actions .win-btn {
-    --ButtonBorderThemeThickness: 0px;
-    --ButtonBorderBrush: transparent;
-    --ButtonBorderBrushCurrent: transparent;
-    --ButtonBorderBrushTopCurrent: transparent;
-    --ButtonBorderBrushBottomCurrent: transparent;
-    --ButtonBorderBrushPointerOver: transparent;
-    --ButtonBorderBrushPointerOverTop: transparent;
-    --ButtonBorderBrushPointerOverBottom: transparent;
-    --ButtonBorderBrushPressed: transparent;
-    --AccentButtonBorderBrushPointerOver: transparent;
-    --AccentButtonBorderBrushPointerOverBottom: transparent;
-    --AccentButtonBorderBrushPressed: transparent;
 }
 
 /* 深色主题：普通按钮 hover 7%，按下 12%（比组件默认略强，但不刺眼） */

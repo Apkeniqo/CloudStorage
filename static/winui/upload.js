@@ -12,8 +12,7 @@ const FINGERPRINT_SLICE_SIZE = 256 * 1024;
 const FINGERPRINT_SLICES = 4;
 
 export const uploads = reactive({
-    tasks: [],
-    visible: false
+    tasks: []
 });
 
 let seq = 0;
@@ -143,7 +142,6 @@ function newTask(file) {
         message: '准备上传…',
         cancelled: false,
         xhrs: new Set(),
-        startedAt: 0,
         lastTick: 0,
         lastLoaded: 0
     });
@@ -240,7 +238,6 @@ export function clearFinished() {
 export async function addFiles(fileList, targetPath) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
-    uploads.visible = true;
 
     for (const file of files) {
         const task = newTask(file);

@@ -102,7 +102,6 @@ config.read(config_file, encoding='utf-8-sig')
 # 解析 SERVER 配置
 HOST = config.get('SERVER', 'host', fallback='::')
 PORT = config.getint('SERVER', 'port', fallback=5000)
-DEBUG = config.getboolean('SERVER', 'debug', fallback=False)
 
 # ---- 鉴权配置 ----
 def persist_config_value(section, key, value):
@@ -374,7 +373,6 @@ def config_groups():
 
 AUTH_ENABLED = config.getboolean('AUTH', 'enabled', fallback=True)
 ADMIN_USER = (config.get('AUTH', 'admin_user', fallback='admin') or '').strip() or 'admin'
-ADMIN_PASSWORD = (config.get('AUTH', 'admin_password', fallback='') or '').strip()
 
 # 文件隔离：开启后普通用户只能看到/操作自己上传的文件，管理员不受影响
 ISOLATE_FILES = config.getboolean('AUTH', 'isolate_files', fallback=False)
@@ -422,8 +420,6 @@ CHUNK_EXPIRE_SECONDS = config.getint('CLEANUP', 'chunk_expire_seconds', fallback
 CLEANUP_INTERVAL_SECONDS = config.getint('CLEANUP', 'cleanup_interval_seconds', fallback=300)
 
 # 日志保留策略（logs 目录默认 100MB 上限，超了删最旧的）
-LOG_DIR = logutil.LOG_DIR
-LOG_FILE = logutil.LOG_FILE
 LOG_MAX_TOTAL_MB = config.getint('LOG', 'max_total_mb', fallback=100)
 LOG_MAX_AGE_DAYS = config.getint('LOG', 'max_age_days', fallback=30)
 LOG_MAX_FILES = config.getint('LOG', 'max_files', fallback=20)
@@ -1733,12 +1729,6 @@ def on_connect():
         return False
     emit('file_update', {'refresh': True})
 
-@socketio.on('get_files')
-def handle_get_files():
-    if AUTH_ENABLED and not current_user():
-        return
-    emit('file_update', {'refresh': True})
-
 # --- HTTP 路由服务 ---
 @app.route('/')
 def index():
@@ -2585,12 +2575,6 @@ def _trash_entries():
     return items
 
 
-@app.route('/trash')
-def trash_page():
-    # 回收站不再是独立页面，统一回到主界面并用视图参数切换
-    return redirect('/?view=trash')
-
-
 @app.route('/api/trash')
 def api_trash():
     if not current_user():
@@ -2916,7 +2900,6 @@ def print_runtime_summary():
 
 
 if __name__ == '__main__':
-    import sys
     exit_code = run_cli(sys.argv[1:])
     if exit_code is not None:
         raise SystemExit(exit_code)

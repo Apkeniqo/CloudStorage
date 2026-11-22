@@ -78,55 +78,6 @@
             text-align: center;
         }
 
-        .cfg-search {
-            position: relative;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 12px 0 4px;
-            padding: 0 10px;
-            min-height: var(--ControlHeight);
-            background: var(--ctrl-fill-default);
-            border: 1px solid var(--ctrl-border);
-            border-bottom-color: var(--ctrl-border-accent);
-            border-radius: var(--ControlCornerRadius);
-            color: var(--text-secondary);
-            max-width: 420px;
-            transition: background-color var(--duration-fast) var(--fast-out-slow-in),
-                        border-color var(--duration-fast) var(--fast-out-slow-in);
-        }
-
-        .cfg-search:hover { background: var(--ctrl-fill-secondary); }
-
-        .cfg-search:focus-within {
-            background: var(--ctrl-fill-input-active);
-            border-color: var(--ctrl-border);
-            border-bottom-color: var(--accent-base);
-            box-shadow: inset 0 -1px 0 0 var(--accent-base);
-        }
-
-        .cfg-search input {
-            flex: 1;
-            min-width: 0;
-            min-height: 0;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: var(--text-primary);
-            font-size: var(--ControlContentThemeFontSize);
-            font-family: inherit;
-            box-shadow: none;
-        }
-
-        .cfg-search-clear {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 12px;
-            padding: 2px 4px;
-        }
-
         .cfg-empty {
             margin: 10px 0 0;
             font-size: 13px;
@@ -701,8 +652,6 @@
         <h2>配置</h2>
         <p class="sub">保存后写回 <code>{{ info.config_path }}</code>，注释和顺序都会保留</p>
 
-        <div class="cfg-empty" id="cfg-empty" style="display:none">没有匹配的设置项</div>
-
         {% for group in groups %}
         <h3 class="cfg-group-title" data-group="{{ group.name }}"
             style="font-size:13px;margin:18px 0 2px;color:var(--text-secondary);">{{ group.name }}</h3>
@@ -800,38 +749,6 @@
 
 <script>
     const CSRF = {{ csrf|tojson }};
-
-    // 设置项搜索
-    function filterConfig(q) {
-        q = (q || '').trim().toLowerCase();
-
-        let shown = 0;
-        document.querySelectorAll('.config-card .field').forEach(function (f) {
-            const keyEl = f.querySelector('[data-key]');
-            const key = keyEl ? (keyEl.getAttribute('data-key') || '').toLowerCase() : '';
-            const hit = !q || f.textContent.toLowerCase().indexOf(q) !== -1
-                || key.indexOf(q) !== -1;
-            f.style.display = hit ? '' : 'none';
-            if (hit) shown++;
-        });
-
-        // 没有可见项的组标题一起藏起来
-        document.querySelectorAll('.cfg-group-title').forEach(function (h) {
-            let n = h.nextElementSibling, any = false;
-            while (n && !n.classList.contains('cfg-group-title')) {
-                if (n.classList.contains('field') && n.style.display !== 'none') any = true;
-                n = n.nextElementSibling;
-            }
-            h.style.display = any ? '' : 'none';
-        });
-
-        const empty = document.getElementById('cfg-empty');
-        if (empty) empty.style.display = shown ? 'none' : '';
-    }
-
-    function clearConfigSearch() {
-        filterConfig('');
-    }
 
     function showToast(id, ok, text) {
         const el = document.getElementById(id);

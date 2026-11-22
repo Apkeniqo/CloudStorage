@@ -1176,3 +1176,38 @@ socket：页面打开后由外部创建文件夹，2.5s 内列表自动出现该
 网格回收站：进入回收站 + 图标视图，点击文件夹项，面包屑保持「回收站 /」不变
         改前会进入文件夹，改后 hasDir=true 但 after 仍为「回收站 /」
 ```
+
+## beta 2026.1117.54 — 清理死代码（审查清单第 3–5 项）
+
+按之前审查报告的清单，删除确认零引用的代码。**12 个文件，-670 行 / +9 行。**
+
+**后端（-58 行）**
+
+- `update.py`：删 `parse_version()`、`Api.text()`、`Api.get()` 里 `raise` 之后的不可达 `return`、`_normalize()` + `changed_files()`（死代码链）
+- `db.py`：删 `files_by_user()`
+- `server.py`：删 `DEBUG` / `ADMIN_PASSWORD` / `LOG_DIR` / `LOG_FILE` 四个未使用全局、`@socketio.on('get_files')` handler、废弃路由 `/trash`、`__main__` 里重复的 `import sys`
+
+**前端（-40 行）**
+
+- `main.js`：删 `syncBlur()`（找 `#blur-panel`/`#blur-bg`，元素不存在）及调用它的 `watch`；import 去掉 `onMounted`/`formatTime`/`WinIcon`
+- `components.js`：import 去掉 `TextBlock`/`CheckBox`/`ProgressBar`/`setViewMode`/`openShares`/`addFiles`/`cancelAll`；删 `export { WinIcon as Icon }`、`PATHS.upload`/`PATHS.search`
+- `store.js`：删 `isSelected()`、`state.ready` 字段及其赋值
+- `api.js`：删 `setPassword()`（0 调用）
+- `upload.js`：删 `uploads.visible`、`startedAt`
+
+**样式（-573 行）**
+
+- `Style.css`：删除 68 个零引用类名的全部规则（旧上传弹窗族 `.toast-*`/`.upload-item-card`/`.progress-*`、`.upload-btn-label`/`.select-control`/`.topbar-title`/`.search-icon-btn`、`.sel-btn` 全套、`.admin-panel` 族、`.sortable-col`/`.sort-arrow`、`.delete-btn`/`.purge-btn`/`.download-btn`、`.guest-mode`/`.trash-row`/`.folder-icon` 等），3537 → 3050 行
+- `admin.html`：删无 DOM 的配置搜索 CSS（`.cfg-search*`）+ 无调用的 `filterConfig()`/`clearConfigSearch()` + `#cfg-empty`；1137 → 1054 行
+- `login.html`：删 `#err-empty`
+
+**未动**：`state.hasBackground`、`state.role`（有实际读取）、store.js 里 9 个仅内部使用的 `export` 关键字、以及第 6 项「同选择器重复定义」（会改动活代码视觉，风险高，按需求未动）。
+
+**验证**
+
+```
+后端    py_compile 通过；服务正常启动
+前端    5 个模块 node --check 通过；页面渲染 app=9441 / sidebar=9860 / toolbar=9785 字节
+       工具栏 8 个按钮齐全，主题切换 dark→light 有效，无 JS 错误
+样式    Style.css 括号 494/494 平衡；列表容器 cardBg/圆角/侧栏宽度与清理前一致
+后台    5 张卡片 / 17 个字段 / 4 个开关 / 角色下拉均正常，截图无异常
