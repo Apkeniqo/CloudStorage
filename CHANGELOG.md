@@ -1211,3 +1211,22 @@ socket：页面打开后由外部创建文件夹，2.5s 内列表自动出现该
        工具栏 8 个按钮齐全，主题切换 dark→light 有效，无 JS 错误
 样式    Style.css 括号 494/494 平衡；列表容器 cardBg/圆角/侧栏宽度与清理前一致
 后台    5 张卡片 / 17 个字段 / 4 个开关 / 角色下拉均正常，截图无异常
+
+## beta 2026.1117.55 — update.py 走系统代理
+
+之前 `urllib.request.urlopen` 只读 `HTTP_PROXY`/`HTTPS_PROXY` 环境变量，**不读 Windows 系统代理**（WinINET 设置）。开着 Clash 之类的代理软件时，浏览器能连 GitHub，但 update.py 直连却连不上。
+
+**改动**（`update.py`，+58 行）：
+
+- 新增 `_system_proxy()`：读注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings` 的 `ProxyEnable` / `ProxyServer` / `ProxyOverride`，兼容 `host:port` 与 `http=h:p;https=h:p` 两种写法
+- 新增 `_bypassed(host, bypass)`：按 `ProxyOverride` 判断是否跳过代理（支持 `*` 通配，`localhost`/`127.0.0.1` 始终直连）
+- 新增 `_open(req, timeout)`：有系统代理就走 `ProxyHandler`，代理连不上（端口没开）自动退回直连
+- `Api.get()` 与 `fetch_one_node()` 的 `urlopen` 统一改为 `_open`
+
+**实测**（本机系统代理 `127.0.0.1:7890`）：
+
+```
+读到的代理     http://127.0.0.1:7890
+bypass 判断    127.0.0.1 -> 跳过代理     api.github.com -> 走代理
+update.py --check   正常：版本读取 + 4 个节点测速 1.10s / 1.40s / 2.19s
+```

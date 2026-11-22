@@ -71,6 +71,80 @@ def is_newer(remote, local):
     return version.is_newer(remote, local)
 
 
+def _system_proxy():
+    """读 Windows 系统代理（Clash 等软件会写到注册表的 Internet Settings）。
+
+    返回 (proxy_url, bypass_string)；没开代理返回 None。
+    """
+    if os.name != 'nt':
+        return None
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                             r'Software\Microsoft\Windows\CurrentVersion\Internet Settings')
+        enabled, _ = winreg.QueryValueEx(key, 'ProxyEnable')
+        if not enabled:
+            return None
+        server, _ = winreg.QueryValueEx(key, 'ProxyServer')
+        try:
+            bypass, _ = winreg.QueryValueEx(key, 'ProxyOverride')
+        except OSError:
+            bypass = ''
+    except OSError:
+        return None
+
+    server = (server or '').strip()
+    if not server:
+        return None
+    # 可能是 "host:port"，也可能是 "http=h:p;https=h:p"
+    if '=' in server:
+        pairs = dict(p.split('=', 1) for p in server.split(';') if '=' in p)
+        proxy = pairs.get('https') or pairs.get('http')
+    else:
+        proxy = server
+    if not proxy:
+        return None
+    return 'http://' + proxy, (bypass or '')
+
+
+def _bypassed(host, bypass):
+    """按 ProxyOverride 判断 host 是否要跳过代理（支持 * 通配）"""
+    if not host:
+        return True
+    if host in ('localhost', '127.0.0.1', '::1'):
+        return True
+    for item in (bypass or '').split(';'):
+        item = item.strip().lower()
+        if not item:
+            continue
+        if item == '<local>':
+            if '.' not in host:
+                return True
+            continue
+        pattern = '^' + re.escape(item).replace(r'\*', '.*') + '$'
+        if re.match(pattern, host.lower()):
+            return True
+    return False
+
+
+def _open(req, timeout):
+    """统一入口：有系统代理就走代理，代理连不上再退回直连"""
+    sp = _system_proxy()
+    if sp:
+        proxy, bypass = sp
+        host = urllib.parse.urlsplit(req.full_url).hostname or ''
+        if not _bypassed(host, bypass):
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({'http': proxy, 'https': proxy}))
+            try:
+                return opener.open(req, timeout=timeout)
+            except urllib.error.HTTPError:
+                raise
+            except (urllib.error.URLError, TimeoutError, OSError):
+                pass    # 代理没开/不可用，退回直连
+    return urllib.request.build_opener().open(req, timeout=timeout)
+
+
 class Api:
     def __init__(self, repo, token):
         self.repo = repo
@@ -86,7 +160,7 @@ class Api:
             if self.token:
                 req.add_header('Authorization', 'token %s' % self.token)
             try:
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                with _open(req, timeout) as resp:
                     data = resp.read()
                 last = None
                 break
@@ -152,7 +226,7 @@ def fetch_one_node(proxy, repo, branch, path, timeout=20):
     url = proxy_raw_url(proxy, repo, branch, path)
     req = urllib.request.Request(url)
     req.add_header('User-Agent', 'cloudstorage-updater')
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _open(req, timeout) as resp:
         data = resp.read()
     head = data[:32].lstrip().lower()
     if head.startswith(b'<!doctype') or head.startswith(b'<html'):
