@@ -1148,3 +1148,31 @@ task.loaded = Math.max(task.loaded, Math.min(task.size, baseLoaded + extra));
 三处都改了：分片进度回调、分片完成回调、直传进度回调。配合上一版的 `delta > 0 ? ... : 0`，速度不可能再出现负值。
 
 > 副作用：极端情况下进度会「只进不退」，也就是某一片重传时进度条不会回退——这正是想要的观感。
+## beta 2026.1117.53 — 修两个遗留缺陷、删两个死文件
+
+**缺陷 1：实时刷新失效（前后端事件名不一致）**
+
+```
+static/winui/main.js:172    socket.on('files_changed', ...)      ← 前端监听
+server.py:536/1734/1740     emit('file_update', {refresh: True}) ← 服务端发送
+```
+
+两边名字对不上，广播永远收不到。前端改成监听 `file_update`（1 行）。
+
+**缺陷 2：网格视图下回收站能点进文件夹**
+
+`components.js:340` 用了不存在的 `state.isTrash`（state 里没有这个字段），条件恒为真。改成与列表视图一致的 `state.view !== 'trash'`。
+
+**删除的死文件**
+
+- `static/winui-demo.html`（114 行）——组件样例页，无任何入口，且放在 `static/` 下会被 Flask 对外暴露
+- `templates/Desktop1.html`（968 行）——旧版整页，早就在 .gitignore 里标注为历史遗留，磁盘上从未被引用
+
+**验证**
+
+```
+socket：页面打开后由外部创建文件夹，2.5s 内列表自动出现该项（未刷新页面）
+        改前 false → 改后 true，rows=["自动刷新测试","图片","文档"]
+网格回收站：进入回收站 + 图标视图，点击文件夹项，面包屑保持「回收站 /」不变
+        改前会进入文件夹，改后 hasDir=true 但 after 仍为「回收站 /」
+```

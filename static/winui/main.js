@@ -169,7 +169,7 @@ function bindSocket() {
     let timer = null;
     try {
         const socket = io({ transports: ['polling'] });
-        socket.on('files_changed', () => {
+        socket.on('file_update', () => {
             if (timer) return;
             timer = setTimeout(() => {
                 timer = null;

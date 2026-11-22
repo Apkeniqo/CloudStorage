@@ -337,7 +337,7 @@ export const FileList = {
                     const path = f.path || f.name;
                     return h('div', {
                         class: 'file-item' + (f.is_dir ? ' is-dir' : '') + (state.selected.includes(path) ? ' selected' : ''),
-                        onClick: () => { if (f.is_dir && !state.isTrash) navigateTo(path); }
+                        onClick: () => { if (f.is_dir && state.view !== 'trash') navigateTo(path); }
                     }, [
                         h('input', {
                             type: 'checkbox', class: 'row-check',
